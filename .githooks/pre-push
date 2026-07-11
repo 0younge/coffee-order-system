@@ -1,0 +1,39 @@
+#!/usr/bin/env sh
+# push 전 테스트 실행. 스택 감지 기준은 test 스킬의 표와 동일.
+# 감지되는 스택이 없으면 통과한다.
+
+fail() { printf '✗ %s 실패 — push를 중단합니다\n' "$1" >&2; exit 1; }
+
+# Node ("test" 스크립트가 실제로 정의된 경우만)
+if [ -f package.json ] && grep -q '"test"[[:space:]]*:' package.json \
+   && ! grep -q 'no test specified' package.json; then
+  npm test || fail "npm test"
+fi
+
+# Python (pytest 종료 코드 5 = 수집된 테스트 없음 → 통과)
+if [ -f pyproject.toml ] || [ -f requirements.txt ]; then
+  if command -v pytest >/dev/null 2>&1; then
+    pytest -q
+    rc=$?
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 5 ]; then
+      fail "pytest"
+    fi
+  fi
+fi
+
+# Go
+if [ -f go.mod ]; then
+  go test ./... || fail "go test"
+fi
+
+# Rust
+if [ -f Cargo.toml ]; then
+  cargo test --quiet || fail "cargo test"
+fi
+
+# JVM(Gradle)
+if [ -x ./gradlew ]; then
+  ./gradlew -q test || fail "gradlew test"
+fi
+
+exit 0

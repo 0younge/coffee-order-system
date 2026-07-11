@@ -1,0 +1,39 @@
+#!/usr/bin/env sh
+# 커밋 전 포맷·린트·컴파일 검사. 스택 감지 기준은 test 스킬의 표와 동일.
+# 감지되는 스택이 없으면 통과한다. 스택 확정 후 명령을 구체화할 것.
+
+fail() { printf '✗ %s 실패 — 커밋을 중단합니다 (--no-verify 우회 금지)\n' "$1" >&2; exit 1; }
+
+# Node
+if [ -f package.json ] && grep -q '"lint"[[:space:]]*:' package.json; then
+  npm run --silent lint || fail "npm run lint"
+fi
+
+# Python
+if [ -f pyproject.toml ] || [ -f requirements.txt ]; then
+  if command -v ruff >/dev/null 2>&1; then
+    ruff check . || fail "ruff check"
+  fi
+fi
+
+# Go
+if [ -f go.mod ]; then
+  unformatted=$(gofmt -l . 2>/dev/null)
+  if [ -n "$unformatted" ]; then
+    echo "$unformatted" >&2
+    fail "gofmt (위 파일 미포맷)"
+  fi
+  go vet ./... || fail "go vet"
+fi
+
+# Rust
+if [ -f Cargo.toml ]; then
+  cargo clippy --quiet -- -D warnings || fail "cargo clippy"
+fi
+
+# JVM(Gradle) — Spring 등. spotless/checkstyle이 check에 등록돼 있으면 함께 실행된다
+if [ -x ./gradlew ]; then
+  ./gradlew -q check -x test || fail "gradlew check -x test"
+fi
+
+exit 0

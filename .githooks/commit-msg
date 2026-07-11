@@ -1,0 +1,35 @@
+#!/usr/bin/env sh
+# 커밋 제목 컨벤션 검사 — commit 스킬(.agents/skills/commit/SKILL.md)과 동일 규칙
+msg_file="$1"
+title=$(head -n 1 "$msg_file")
+
+# 머지·리버트·자동 커밋은 검사하지 않는다
+case "$title" in
+  Merge*|Revert*|fixup!*|squash!*) exit 0 ;;
+esac
+
+# 정규식(grep) 대신 셸 case 사용 — 일부 리눅스 로케일에서 grep이
+# 특정 한글 문자를 '.'로 매칭하지 못하는 문제가 있어 로케일 무관하게 검사한다
+case "$title" in
+  "feat: "?*|"fix: "?*|"refactor: "?*|"docs: "?*|"test: "?*|"chore: "?*)
+    ;;
+  *)
+    {
+      echo "✗ 커밋 제목이 컨벤션과 다릅니다: '<타입>: <한국어 요약>'"
+      echo "  타입: feat | fix | refactor | docs | test | chore"
+      echo "  예:   feat: 로그인 기능 추가"
+      echo "  현재: $title"
+    } >&2
+    exit 1
+    ;;
+esac
+
+# wc -m은 UTF-8 로케일이 없으면 바이트를 세므로, UTF-8 연속 바이트(0x80-0xBF)를
+# 제거해 코드포인트당 1바이트만 남긴 뒤 세어 로케일 무관하게 문자 수를 구한다
+len=$(printf '%s' "$title" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d '[:space:]')
+if [ "$len" -gt 50 ]; then
+  echo "✗ 커밋 제목이 ${len}자입니다 — 50자 이내로 줄이세요" >&2
+  exit 1
+fi
+
+exit 0
