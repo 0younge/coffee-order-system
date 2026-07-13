@@ -25,6 +25,9 @@
 | [0009](./0009-model-single-menu-orders-with-snapshots.md) | 단일 메뉴 주문과 주문 시점 스냅샷 사용 | 승인됨 |
 | [0010](./0010-test-against-mysql-with-docker-compose.md) | Docker Compose의 실제 MySQL로 통합 테스트 | 승인됨 |
 | [0011](./0011-return-temporary-unavailable-on-database-contention.md) | DB 경합 timeout과 deadlock에 일시적 오류 반환 | 승인됨 |
+| [0012](./0012-use-spring-security-for-jwt.md) | JWT 구현에 Spring Security 사용 | 승인됨 |
+| [0013](./0013-use-actuator-and-micrometer-for-observability.md) | 관측성에 Actuator와 Micrometer 사용 | 승인됨 |
+| [0014](./0014-send-outbox-batches-asynchronously.md) | Outbox 배치를 비동기로 병렬 전송 | 승인됨 |
 
 ## 변경 규칙
 

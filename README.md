@@ -47,9 +47,10 @@
 | 애플리케이션 | Spring Boot 4.1.0, Spring Web MVC, Spring Security, Spring Data JPA |
 | 빌드 | Gradle 9.5.1 Wrapper |
 | 데이터베이스 | MySQL 8.4 LTS |
-| 스키마 변경 | Flyway |
-| 인증 | BCrypt 비밀번호 해시, HS256 30분 JWT Access Token |
+| 스키마 변경 | Flyway (`flyway-core`, `flyway-mysql`) |
+| 인증 | Spring Security, BCrypt 비밀번호 해시, HS256 30분 JWT Access Token |
 | 테스트 | JUnit 5, 실제 MySQL 기반 통합 테스트, 외부 API Mock 서버 |
+| 관측성 | Spring Boot Actuator, Micrometer |
 | 로컬 인프라 | Docker Compose로 MySQL만 실행; 애플리케이션은 호스트에서 Gradle로 실행 |
 
 버전 선택의 근거는 [ADR-0005](./docs/adr/0005-establish-java-spring-mysql-platform-baseline.md), 애플리케이션 구성 방식은 [ADR-0006](./docs/adr/0006-use-feature-oriented-modular-monolith.md)를 참고합니다.
@@ -68,6 +69,7 @@ docker compose up -d --wait
 - 기본 데이터베이스는 `coffee_order_system`, 사용자명과 비밀번호는 `coffee`입니다.
 - 기존 로컬 MySQL과의 충돌을 피하기 위해 기본 호스트 포트는 `3307`입니다.
 - 데이터베이스 이름은 `DB_NAME`, 호스트 포트는 `DB_PORT`, 애플리케이션 JDBC URL은 `DB_URL`, 사용자명은 `DB_USERNAME`, 비밀번호는 `DB_PASSWORD`로 재정의할 수 있습니다. MySQL root 비밀번호는 `DB_ROOT_PASSWORD`로 재정의합니다.
+- JWT 서명 키는 `JWT_SECRET_BASE64`로 주입하며 Base64 디코딩 후 최소 32바이트여야 합니다. 외부 API 주소는 `COLLECTION_API_BASE_URL`로 주입합니다. 두 값에는 기본값이 없으며 누락되거나 잘못되면 애플리케이션 시작이 실패합니다.
 - Flyway 구현 후 애플리케이션 시작 시 스키마와 초기 메뉴를 적용합니다.
 - 통합 테스트는 인메모리 DB로 대체하지 않고 실제 MySQL과의 SQL·락·제약 조건 동작을 검증합니다.
 
@@ -100,6 +102,9 @@ docker compose up -d --wait
 9. [ADR-0009: 주문을 단일 메뉴와 스냅샷으로 모델링](./docs/adr/0009-model-single-menu-orders-with-snapshots.md)
 10. [ADR-0010: Docker Compose의 MySQL로 통합 테스트](./docs/adr/0010-test-against-mysql-with-docker-compose.md)
 11. [ADR-0011: DB 경합 timeout과 deadlock에 일시적 오류 반환](./docs/adr/0011-return-temporary-unavailable-on-database-contention.md)
+12. [ADR-0012: JWT 구현에 Spring Security 사용](./docs/adr/0012-use-spring-security-for-jwt.md)
+13. [ADR-0013: 관측성에 Actuator와 Micrometer 사용](./docs/adr/0013-use-actuator-and-micrometer-for-observability.md)
+14. [ADR-0014: Outbox 배치를 비동기로 병렬 전송](./docs/adr/0014-send-outbox-batches-asynchronously.md)
 
 ## 의도적으로 제외한 범위
 
