@@ -1,0 +1,33 @@
+# 아키텍처 결정 기록
+
+이 디렉터리는 구현자가 “무엇을 선택했는가”뿐 아니라 “왜 선택했는가”를 확인하는 정본이다. 파일 하나는 되돌리기 비싼 결정 하나만 다룬다.
+
+## 상태 의미
+
+| 상태 | 의미 |
+|---|---|
+| 제안됨 | 결정 방향을 문서화했으며 최종 승인 전이다. 구현 전에 프로젝트 소유자의 승인을 받는다. |
+| 승인됨 | 구현 기준으로 확정됐다. 본문을 직접 고치지 않고 변경 시 새 ADR로 대체한다. |
+| 대체됨 | 더 새로운 ADR이 이 결정을 대신한다. |
+
+## 결정 목록
+
+| 번호 | 결정 | 상태 |
+|---:|---|---|
+| [0001](./0001-use-database-pessimistic-locking-for-points.md) | 포인트 변경에 DB 비관적 락 사용 | 승인됨 |
+| [0002](./0002-protect-mutations-with-idempotency-keys.md) | 충전과 주문에 멱등키 적용 | 승인됨 |
+| [0003](./0003-deliver-order-events-with-transactional-outbox.md) | 주문 이벤트를 Transactional Outbox로 전달 | 승인됨 |
+| [0004](./0004-calculate-popular-menus-from-paid-orders.md) | 인기 메뉴를 결제 완료 주문에서 직접 집계 | 승인됨 |
+| [0005](./0005-establish-java-spring-mysql-platform-baseline.md) | Java·Spring·MySQL 플랫폼 기준선 확정 | 승인됨 |
+| [0006](./0006-use-feature-oriented-modular-monolith.md) | 기능 중심 모듈러 모놀리스 사용 | 승인됨 |
+| [0007](./0007-store-current-point-balance-without-ledger.md) | 포인트 원장 없이 현재 잔액 저장 | 승인됨 |
+| [0008](./0008-use-stateless-jwt-access-token-authentication.md) | JWT Access Token 기반 무상태 인증 사용 | 승인됨 |
+| [0009](./0009-model-single-menu-orders-with-snapshots.md) | 단일 메뉴 주문과 주문 시점 스냅샷 사용 | 승인됨 |
+| [0010](./0010-test-against-mysql-with-docker-compose.md) | Docker Compose의 실제 MySQL로 통합 테스트 | 승인됨 |
+| [0011](./0011-return-temporary-unavailable-on-database-contention.md) | DB 경합 timeout과 deadlock에 일시적 오류 반환 | 승인됨 |
+
+## 변경 규칙
+
+1. 제안 상태에서는 검토 의견을 반영해 같은 파일을 다듬는다.
+2. 프로젝트 소유자가 확정하면 상태를 `승인됨`으로 변경한다.
+3. 승인된 결정은 본문을 수정하지 않는다. 다른 선택으로 바꿀 때 다음 번호 ADR을 만들고 기존 상태를 `대체됨 (→ NNNN)`으로 변경한다.
