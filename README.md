@@ -84,7 +84,7 @@ erDiagram
 | 다중 워커의 중복 점유와 늦은 갱신 | 단일 워커, 분산 락, `SKIP LOCKED`와 fencing | `SKIP LOCKED`, 30초 lease, `claim_token` | 여러 인스턴스가 작업을 나누고 만료된 워커의 상태 덮어쓰기를 막음. 외부 전달은 at-least-once임 |
 | 인기 메뉴 주문 수의 정확성 | 캐시·사전 집계, 이벤트 조회 모델, 주문 직접 집계 | 최근 `PAID` 주문 직접 집계 | 별도 집계 정합성 문제 없이 커밋된 주문과 즉시 일치함. 데이터 증가 시 쿼리 비용을 측정해야 함 |
 | 다중 인스턴스 사용자 식별 | 요청 본문 사용자 ID, 서버 세션, JWT | JWT `sub` | 인스턴스가 공유 세션 없이 독립 검증하고 다른 사용자 ID 지정 공격을 막음. 만료 전 강제 폐기는 지원하지 않음 |
-| MySQL 고유 동작 검증 | H2, 저장소 mock, 실제 MySQL | 단일 Compose MySQL | 비관적 락·`SKIP LOCKED`·CHECK·실행 계획을 실제 제품에서 검증함. 테스트는 자기 데이터만 정리해야 함 |
+| MySQL 고유 동작 검증 | H2, 저장소 mock, 실제 MySQL | 단일 Compose MySQL의 별도 테스트 DB | 실제 제품 동작을 검증하면서 개발 데이터와 전역 Outbox 워커의 간섭을 차단함. 테스트 DB 초기화가 추가됨 |
 
 ### 기술적 선택 이유
 
@@ -96,6 +96,7 @@ erDiagram
 | Spring Security·JWT | 검증된 Bearer 인증 흐름과 BCrypt·Nimbus 구현을 재사용해 직접 암호 구현을 피함 |
 | JDK `HttpClient`·Mock HTTP | 외부 전달과 테스트에 별도 HTTP 라이브러리를 추가하지 않고 표준 기능 사용 |
 | Actuator·Micrometer | API·DB 경합·Outbox backlog와 재시도를 같은 계측 방식으로 관찰 |
+| Spotless | Java 포맷을 `check` 완료 게이트에서 결정적으로 검사하고 필요할 때만 명시적으로 자동 수정 |
 
 ## 제품 범위
 
@@ -143,11 +144,12 @@ erDiagram
 | 인증 | Spring Security, BCrypt 비밀번호 해시, HS256 30분 JWT Access Token |
 | 테스트 | JUnit 5, 실제 MySQL 기반 통합 테스트, 외부 API Mock 서버 |
 | 관측성 | Spring Boot Actuator, Micrometer |
+| 코드 포맷 검사 | Gradle Spotless와 Java 포매터, `spotlessCheck`를 `check`에 포함 |
 | 로컬 인프라 | Docker Compose로 MySQL만 실행; 애플리케이션은 호스트에서 Gradle로 실행 |
 
 버전 선택의 근거는 [ADR-0005](./docs/adr/0005-establish-java-spring-mysql-platform-baseline.md), 애플리케이션 구성 방식은 [ADR-0006](./docs/adr/0006-use-feature-oriented-modular-monolith.md)를 참고합니다.
 
-자동 구현 단계에서 추가가 승인된 의존성은 `spring-boot-starter-validation`, `spring-boot-starter-oauth2-resource-server`, `spring-boot-starter-actuator`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`뿐입니다. Mock HTTP, 비동기 HTTP와 bounded polling은 JDK 표준 기능을 사용하고 다른 라이브러리는 추가 전에 다시 확인합니다.
+자동 구현 단계에서 추가가 승인된 애플리케이션 의존성은 `spring-boot-starter-validation`, `spring-boot-starter-oauth2-resource-server`, `spring-boot-starter-actuator`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`뿐입니다. 빌드 도구로는 Spotless 플러그인과 Java 포매터가 추가 승인됐습니다. Mock HTTP, 비동기 HTTP와 bounded polling은 JDK 표준 기능을 사용하고 다른 라이브러리는 추가 전에 다시 확인합니다.
 
 ## 로컬 실행 계약
 
@@ -158,19 +160,23 @@ cp .env.example .env
 # .env의 비밀번호와 비밀값을 실행 환경에 맞게 변경
 docker compose up -d --wait
 ./gradlew test
+./gradlew check
 ./gradlew bootRun
 ```
 
 - Docker Compose에는 MySQL 서비스만 포함합니다. 애플리케이션 컨테이너는 만들지 않습니다.
-- 기본 데이터베이스는 `coffee_order_system`, 사용자명은 `coffee`입니다. DB 비밀번호에는 기본값이 없습니다.
+- 기본 개발 데이터베이스는 `coffee_order_system`, 테스트 데이터베이스는 `coffee_order_system_test`, 사용자명은 `coffee`입니다. DB 비밀번호에는 기본값이 없습니다.
 - 기존 로컬 MySQL과의 충돌을 피하기 위해 기본 호스트 포트는 `3307`입니다.
-- 데이터베이스 이름은 `DB_NAME`, 호스트 포트는 `DB_PORT`, 애플리케이션 JDBC URL은 `DB_URL`, 사용자명은 `DB_USERNAME`, 비밀번호는 `DB_PASSWORD`로 재정의할 수 있습니다. MySQL root 비밀번호는 `DB_ROOT_PASSWORD`로 재정의합니다.
+- 개발 데이터베이스 이름과 JDBC URL은 `DB_NAME`, `DB_URL`, 테스트 데이터베이스 이름과 JDBC URL은 `TEST_DB_NAME`, `TEST_DB_URL`로 재정의할 수 있습니다. 호스트 포트는 `DB_PORT`, 사용자명은 `DB_USERNAME`, 비밀번호는 `DB_PASSWORD`, MySQL root 비밀번호는 `DB_ROOT_PASSWORD`로 재정의합니다.
 - JWT 서명 키는 `JWT_SECRET_BASE64`로 주입하며 Base64 디코딩 후 최소 32바이트여야 합니다. 외부 API 주소는 `COLLECTION_API_BASE_URL`로 주입합니다. 두 값에는 기본값이 없으며 누락되거나 잘못되면 애플리케이션 시작이 실패합니다.
+- Outbox 워커 활성화 여부는 `OUTBOX_WORKER_ENABLED`, 폴링 주기와 배치 크기는 `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`로 설정하며 기본값은 각각 `true`, `1000`, `50`입니다.
 - 로컬에서는 저장소 루트의 `.env`를 Docker Compose와 Spring Boot가 함께 읽습니다. `.env`와 `.env.*`는 커밋하지 않고 키 목록과 안전한 예시만 `.env.example`로 관리합니다.
 - CI·운영에서는 `.env` 파일 대신 같은 이름의 시스템 환경 변수를 주입할 수 있으며, 시스템 환경 변수가 `.env` 값보다 우선합니다.
 - Flyway 구현 후 애플리케이션 시작 시 스키마와 초기 메뉴를 적용합니다.
 - 통합 테스트는 인메모리 DB로 대체하지 않고 실제 MySQL과의 SQL·락·제약 조건 동작을 검증합니다.
-- 개발과 테스트는 같은 Compose MySQL을 사용하되 테스트별 고유 데이터만 FK 순서로 정리합니다. 전체 `TRUNCATE`, schema 삭제와 `Flyway clean`은 사용하지 않습니다.
+- 개발과 테스트는 같은 Compose MySQL 인스턴스를 사용하되 서로 다른 데이터베이스를 사용합니다. 일반 테스트에서는 Outbox 워커를 비활성화하고 Outbox 전용 테스트에서만 활성화합니다.
+- 테스트는 고유 데이터만 FK 순서로 정리합니다. 전체 `TRUNCATE`, schema 삭제와 `Flyway clean`은 사용하지 않습니다.
+- 첫 자동 구현 완료 게이트에는 기능·동시성·외부 계약·품질 검사와 정상 조건의 Outbox 최초 요청 2초 검증을 포함합니다. `PT-*` 부하·성능 기준선은 기능 구현 후 별도 작업으로 측정합니다.
 
 완료 판정 절차와 테스트 범위는 [테스트 전략](./docs/test-strategy.md)을 따릅니다.
 
@@ -207,6 +213,10 @@ docker compose up -d --wait
 15. [ADR-0015: 충전과 주문에 멱등키 적용](./docs/adr/0015-protect-mutations-with-idempotency-keys.md)
 16. [ADR-0016: 임의 상한 없이 현재 포인트 잔액 저장](./docs/adr/0016-store-positive-point-balance-without-arbitrary-cap.md)
 17. [ADR-0017: Outbox 최초 전송 시도 시간을 제한](./docs/adr/0017-bound-first-outbox-attempt-latency.md)
+18. [ADR-0018: 테스트 데이터베이스와 Outbox 워커 격리](./docs/adr/0018-isolate-test-database-and-outbox-workers.md)
+19. [ADR-0019: Spotless를 코드 포맷 완료 게이트로 사용](./docs/adr/0019-use-spotless-as-format-gate.md)
+20. [ADR-0020: 상태 수명주기 불변식을 DB CHECK로 강제](./docs/adr/0020-enforce-lifecycle-invariants-with-database-checks.md)
+21. [ADR-0021: 무상태 Bearer REST 보안 경계 구성](./docs/adr/0021-configure-stateless-bearer-security-boundary.md)
 
 ## 의도적으로 제외한 범위
 

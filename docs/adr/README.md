@@ -31,6 +31,10 @@
 | [0015](./0015-protect-mutations-with-idempotency-keys.md) | 충전과 주문에 멱등키 적용 | 승인됨 |
 | [0016](./0016-store-positive-point-balance-without-arbitrary-cap.md) | 임의 상한 없이 현재 포인트 잔액 저장 | 승인됨 |
 | [0017](./0017-bound-first-outbox-attempt-latency.md) | Outbox 최초 전송 시도 시간을 제한 | 승인됨 |
+| [0018](./0018-isolate-test-database-and-outbox-workers.md) | 테스트 데이터베이스와 Outbox 워커 격리 | 승인됨 |
+| [0019](./0019-use-spotless-as-format-gate.md) | Spotless를 코드 포맷 완료 게이트로 사용 | 승인됨 |
+| [0020](./0020-enforce-lifecycle-invariants-with-database-checks.md) | 상태 수명주기 불변식을 DB CHECK로 강제 | 승인됨 |
+| [0021](./0021-configure-stateless-bearer-security-boundary.md) | 무상태 Bearer REST 보안 경계 구성 | 승인됨 |
 
 ## 변경 규칙
 
