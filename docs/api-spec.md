@@ -12,16 +12,14 @@
 |---|---|
 | Base path | `/api/v1` |
 | 요청·응답 Content-Type | `application/json` |
-| 보호 API 인증 | `Authorization: Bearer <access-token>` |
 | 충전·주문 멱등성 | UUID 문자열 `Idempotency-Key` 필수 |
-| 사용자 식별 | 요청 본문에서 받지 않고 검증된 JWT의 `sub`에서 추출 |
-| Security 상태 | 서버 세션 없이 Bearer Token만 사용; CSRF·form login·HTTP Basic 비활성화 |
+| 사용자 식별 | 충전·주문 요청 본문의 기존 사용자 `userId` |
 | 금액 단위 | 정수 포인트(P), 1원 = 1P |
 | 시간 | UTC 기준 ISO 8601 문자열(예: `2026-07-11T12:00:00Z`) |
 
-원문 요구사항의 "사용자 식별값"은 보호 API의 JWT `sub`에 대응합니다. 충전·주문 요청 본문에 `userId`를 받지 않으며, 알 수 없는 필드로 보내면 거절합니다. 문서의 숫자 ID와 날짜는 예시일 뿐 고정값이 아닙니다. 이메일·비밀번호·멱등키의 구체적인 검증 규칙은 [입력 검증 규칙](#13-입력-검증-규칙)을 따릅니다. 알 수 없는 JSON 필드, 문자열에서 숫자로의 자동 형 변환, 필수 필드의 누락·`null`은 허용하지 않습니다.
+원문 요구사항의 "사용자 식별값"은 충전·주문 요청 본문의 `userId`에 대응합니다. `userId`는 시스템에 이미 존재하는 사용자를 가리켜야 하며 사용자 생성과 소유권 검증은 현재 범위에 포함하지 않습니다. 문서의 숫자 ID와 날짜는 예시일 뿐 고정값이 아닙니다. 사용자 ID와 멱등키의 구체적인 검증 규칙은 [입력 검증 규칙](#11-입력-검증-규칙)을 따릅니다. 알 수 없는 JSON 필드, 문자열에서 숫자로의 자동 형 변환, 필수 필드의 누락·`null`은 허용하지 않습니다.
 
-회원가입, 로그인, 메뉴 목록, 인기 메뉴와 상세 정보를 숨긴 Actuator health endpoint는 공개합니다. 포인트 충전과 주문은 유효한 JWT를 요구합니다. 프론트엔드가 범위 밖이므로 CORS 설정은 제공하지 않으며, 보호 API의 인증 실패도 공통 오류 응답 봉투를 사용합니다.
+모든 업무 API는 별도 인증 없이 호출합니다. Actuator는 상세 정보를 숨긴 health endpoint만 HTTP에 노출합니다.
 
 ### 공통 응답 봉투
 
@@ -58,114 +56,18 @@ HTTP 상태 코드는 본문 코드와 별개로 의미에 맞게 사용하며, 
 
 ## 3. API 목록
 
-| 기능 | Method | Path | 인증 | 멱등키 |
-|---|---|---|---|---|
-| 회원가입 | POST | `/auth/signup` | 불필요 | 불필요 |
-| 로그인 | POST | `/auth/login` | 불필요 | 불필요 |
-| 메뉴 목록 | GET | `/menus` | 불필요 | 불필요 |
-| 포인트 충전 | POST | `/points/charge` | 필요 | 필요 |
-| 주문 및 결제 | POST | `/orders` | 필요 | 필요 |
-| 인기 메뉴 | GET | `/menus/popular` | 불필요 | 불필요 |
+| 기능 | Method | Path | 멱등키 |
+|---|---|---|---|
+| 메뉴 목록 | GET | `/menus` | 불필요 |
+| 포인트 충전 | POST | `/points/charge` | 필요 |
+| 주문 및 결제 | POST | `/orders` | 필요 |
+| 인기 메뉴 | GET | `/menus/popular` | 불필요 |
 
-## 4. 회원가입
-
-`POST /api/v1/auth/signup`
-
-### 요청 필드
-
-| 필드 | 타입 | 필수 | 검증·의미 |
-|---|---|---:|---|
-| `email` | string | 예 | 앞뒤 공백 제거 후 `@NotBlank`, `@Email`, 최대 254자. 저장 대소문자는 유지하고 중복 비교는 대소문자 무시 |
-| `password` | string | 예 | 최소 8자·UTF-8 최대 72바이트. 앞뒤 공백은 거절, 중간 공백 허용, 조합 규칙 없음 |
-
-```json
-{
-  "email": "user@example.com",
-  "password": "secure-password"
-}
-```
-
-### 성공 응답
-
-`201 Created`
-
-| `data` 필드 | 타입 | 의미 |
-|---|---|---|
-| `userId` | integer | 서버가 생성한 사용자 ID |
-| `email` | string | 생성된 사용자의 이메일 |
-
-```json
-{
-  "success": true,
-  "code": "USER_CREATED",
-  "message": "회원가입이 완료되었습니다.",
-  "data": {
-    "userId": 1,
-    "email": "user@example.com"
-  }
-}
-```
-
-### 실패 계약
-
-- 형식 또는 필드 검증 실패: `400 INVALID_REQUEST`
-- 이미 존재하는 이메일: `409 EMAIL_ALREADY_EXISTS`
-- 동시 중복 가입도 DB 유일 제약을 기준으로 하나만 성공해야 합니다.
-- 비밀번호 원문과 해시는 응답이나 로그에 포함하지 않습니다.
-- 생성된 사용자의 포인트 잔액은 `0P`입니다.
-
-## 5. 로그인
-
-`POST /api/v1/auth/login`
-
-### 요청 필드
-
-| 필드 | 타입 | 필수 | 의미 |
-|---|---|---:|---|
-| `email` | string | 예 | 가입 이메일 |
-| `password` | string | 예 | BCrypt 해시와 비교할 비밀번호 원문. 저장·로그 금지 |
-
-```json
-{
-  "email": "user@example.com",
-  "password": "secure-password"
-}
-```
-
-### 성공 응답
-
-`200 OK`
-
-| `data` 필드 | 타입 | 의미 |
-|---|---|---|
-| `accessToken` | string | 보호 API에 사용할 JWT Access Token |
-| `tokenType` | string | 고정값 `Bearer` |
-| `expiresInSeconds` | integer | 발급 시점부터 만료까지의 초. 고정값 `1800` |
-
-```json
-{
-  "success": true,
-  "code": "LOGIN_SUCCESS",
-  "message": "로그인에 성공했습니다.",
-  "data": {
-    "accessToken": "eyJ...",
-    "tokenType": "Bearer",
-    "expiresInSeconds": 1800
-  }
-}
-```
-
-### 실패 계약
-
-- 이메일 부재와 비밀번호 불일치는 모두 `401 INVALID_CREDENTIALS`입니다.
-- 실패 메시지로 이메일 존재 여부를 노출하지 않습니다.
-- 토큰은 HS256으로 서명하고 `sub` 사용자 ID, `iat`, `exp`, `iss=coffee-order-system`을 포함합니다. `jti`, `aud`, `kid`와 애플리케이션 내부 키 회전 기능은 사용하지 않습니다.
-
-## 6. 메뉴 목록 조회
+## 4. 메뉴 목록 조회
 
 `GET /api/v1/menus`
 
-요청 본문과 쿼리 파라미터가 없으며 인증이 필요하지 않습니다.
+요청 본문과 쿼리 파라미터가 없습니다.
 
 ### 성공 응답
 
@@ -192,7 +94,7 @@ HTTP 상태 코드는 본문 코드와 별개로 의미에 맞게 사용하며, 
 }
 ```
 
-## 7. 포인트 충전
+## 5. 포인트 충전
 
 `POST /api/v1/points/charge`
 
@@ -200,11 +102,9 @@ HTTP 상태 코드는 본문 코드와 별개로 의미에 맞게 사용하며, 
 
 | 헤더 | 필수 | 의미 |
 |---|---:|---|
-| `Authorization` | 예 | `Bearer <access-token>` |
 | `Idempotency-Key` | 예 | 하나의 논리적 충전 요청에 재사용할 클라이언트 생성 UUID 문자열 |
 
 ```text
-Authorization: Bearer <access-token>
 Idempotency-Key: 3f50f3c8-25c8-4a11-a182-2fb9f2d46e68
 ```
 
@@ -212,10 +112,11 @@ Idempotency-Key: 3f50f3c8-25c8-4a11-a182-2fb9f2d46e68
 
 | 필드 | 타입 | 필수 | 검증·의미 |
 |---|---|---:|---|
+| `userId` | integer | 예 | signed `BIGINT` 범위의 0보다 큰 기존 사용자 ID |
 | `amount` | integer | 예 | signed `BIGINT` 범위의 0보다 큰 충전 포인트. 소수·범위 밖 값 허용 안 함 |
 
 ```json
-{ "amount": 10000 }
+{ "userId": 1, "amount": 10000 }
 ```
 
 ### 성공 응답
@@ -241,15 +142,15 @@ Idempotency-Key: 3f50f3c8-25c8-4a11-a182-2fb9f2d46e68
 
 ### 실패 계약
 
-- 토큰 누락·만료·위조: `401 AUTHENTICATION_REQUIRED`
+- 사용자 부재: `404 USER_NOT_FOUND`; 멱등 결과를 저장하지 않음
 - 금액이 정수가 아니거나 0 이하이거나 signed `BIGINT` 범위를 벗어남: `400 INVALID_CHARGE_AMOUNT`
 - 현재 잔액과 충전금액의 합이 signed `BIGINT` 범위를 벗어남: `409 POINT_BALANCE_OVERFLOW`
 - 필수 헤더·필드 누락 또는 그 밖의 형식 오류: `400 INVALID_REQUEST`
 - 같은 멱등키에 다른 `amount` 사용: `409 IDEMPOTENCY_KEY_REUSED`
 - DB 락 대기 5초 초과 또는 deadlock: `503 TEMPORARILY_UNAVAILABLE`
-- 모든 실패에서 포인트 잔액은 변경되지 않습니다. 멱등 레코드의 커밋·롤백 범위는 [멱등성 계약](#10-멱등성-계약)을 따릅니다.
+- 모든 실패에서 포인트 잔액은 변경되지 않습니다. 멱등 레코드의 커밋·롤백 범위는 [멱등성 계약](#8-멱등성-계약)을 따릅니다.
 
-## 8. 주문 및 결제
+## 6. 주문 및 결제
 
 `POST /api/v1/orders`
 
@@ -257,11 +158,9 @@ Idempotency-Key: 3f50f3c8-25c8-4a11-a182-2fb9f2d46e68
 
 | 헤더 | 필수 | 의미 |
 |---|---:|---|
-| `Authorization` | 예 | `Bearer <access-token>` |
 | `Idempotency-Key` | 예 | 하나의 논리적 주문 요청에 재사용할 클라이언트 생성 UUID 문자열 |
 
 ```text
-Authorization: Bearer <access-token>
 Idempotency-Key: 9324b129-5cc7-4fb2-8b8d-8a3c48617453
 ```
 
@@ -269,10 +168,11 @@ Idempotency-Key: 9324b129-5cc7-4fb2-8b8d-8a3c48617453
 
 | 필드 | 타입 | 필수 | 검증·의미 |
 |---|---|---:|---|
+| `userId` | integer | 예 | signed `BIGINT` 범위의 0보다 큰 기존 사용자 ID |
 | `menuId` | integer | 예 | 주문할 메뉴 하나의 ID. 존재하지 않으면 `MENU_NOT_FOUND` |
 
 ```json
-{ "menuId": 1 }
+{ "userId": 1, "menuId": 1 }
 ```
 
 ### 성공 응답
@@ -315,7 +215,7 @@ Idempotency-Key: 9324b129-5cc7-4fb2-8b8d-8a3c48617453
 
 ### 실패 계약
 
-- 토큰 누락·만료·위조: `401 AUTHENTICATION_REQUIRED`
+- 사용자 부재: `404 USER_NOT_FOUND`; 멱등 결과를 저장하지 않음
 - 메뉴 부재: `404 MENU_NOT_FOUND`
 - 포인트 부족: `409 INSUFFICIENT_POINT`
 - 같은 멱등키에 다른 `menuId` 사용: `409 IDEMPOTENCY_KEY_REUSED`
@@ -324,11 +224,11 @@ Idempotency-Key: 9324b129-5cc7-4fb2-8b8d-8a3c48617453
 - 메뉴 부재와 포인트 부족은 예상 가능한 비즈니스 실패입니다. 포인트·주문·Outbox는 변경하지 않고 실패 HTTP 상태와 본문을 멱등 결과로 커밋합니다.
 - 인프라 오류는 포인트·주문·Outbox·멱등 레코드를 모두 롤백합니다.
 
-## 9. 인기 메뉴 조회
+## 7. 인기 메뉴 조회
 
 `GET /api/v1/menus/popular`
 
-요청 본문과 쿼리 파라미터가 없으며 인증이 필요하지 않습니다.
+요청 본문과 쿼리 파라미터가 없습니다.
 
 ### 집계 계약
 
@@ -369,12 +269,12 @@ Idempotency-Key: 9324b129-5cc7-4fb2-8b8d-8a3c48617453
 }
 ```
 
-## 10. 멱등성 계약
+## 8. 멱등성 계약
 
 ### 적용 범위와 키 의미
 
 - 적용 API: 포인트 충전, 주문 및 결제
-- 유일 범위: `(인증 사용자 ID, 작업 유형, Idempotency-Key)`
+- 유일 범위: `(요청 userId, 작업 유형, Idempotency-Key)`
 - 키 형식: UUID 문자열. 파싱한 UUID의 표준 소문자 문자열을 저장합니다.
 - 클라이언트는 하나의 논리 요청과 그 네트워크 재시도에 같은 키를 사용하고, 다른 논리 요청에는 새 키를 사용합니다.
 - 서버는 `CHARGE|<amount>` 또는 `ORDER|<menuId>`의 UTF-8 SHA-256 `request_hash`를 저장해 같은 키의 요청 내용이 동일한지 비교합니다.
@@ -383,7 +283,7 @@ Idempotency-Key: 9324b129-5cc7-4fb2-8b8d-8a3c48617453
 
 | 상황 | 처리 | 공개 결과 |
 |---|---|---|
-| 처음 본 키 | 멱등 레코드를 `PROCESSING`으로 만들고 비즈니스 처리 | 성공 또는 명세된 실패 결과로 진행 |
+| 처음 본 키 | 기존 사용자를 확인한 뒤 멱등 레코드를 `PROCESSING`으로 만들고 비즈니스 처리 | 성공 또는 명세된 실패 결과로 진행 |
 | 같은 키·같은 요청, 최초 결과 확정 | 저장한 `http_status`, `result_code`, `response_body` 재사용 | 최초 HTTP 상태와 응답 본문 반환 |
 | 같은 키·다른 요청 | 비즈니스 처리하지 않음 | `409 IDEMPOTENCY_KEY_REUSED` |
 | 최초 처리 중 인프라 오류 | 전체 트랜잭션과 멱등 레코드 롤백 | `500 INTERNAL_SERVER_ERROR`; 같은 논리 요청 재시도 가능 |
@@ -396,7 +296,7 @@ Idempotency-Key: 9324b129-5cc7-4fb2-8b8d-8a3c48617453
 3. 비즈니스 실패에서는 포인트·주문·Outbox를 변경하지 않지만 실패 멱등 결과는 커밋합니다.
 4. DB 연결·커밋 등 예상하지 못한 인프라 오류는 도메인 변경과 멱등 레코드를 모두 롤백합니다.
 5. DB 유일 제약으로 동시 최초 요청을 하나만 처리합니다. 승자 트랜잭션이 커밋되면 같은 요청은 그 결과를 재사용하고, 승자가 롤백되면 후속 요청이 다시 처리할 수 있습니다.
-6. 인증 실패, 멱등키 누락·형식 오류, JSON 오류, 필수 필드 누락과 잘못된 충전 금액은 트랜잭션 전에 거절하고 멱등 결과로 저장하지 않습니다.
+6. 사용자 부재, 멱등키 누락·형식 오류, JSON 오류, 필수 필드 누락과 잘못된 충전 금액은 멱등 결과로 저장하지 않습니다.
 
 DB 락 대기는 최대 5초입니다. timeout이나 deadlock의 `503` 결과는 멱등 저장하지 않으므로 클라이언트는 반드시 같은 키로 재시도합니다.
 
@@ -408,16 +308,14 @@ DB 락 대기는 최대 5초입니다. timeout이나 deadlock의 `503` 결과는
 
 JSON 원문, 공백과 필드 순서는 요청 해시 입력에 포함하지 않습니다.
 
-## 11. 오류 코드
+## 9. 오류 코드
 
 | HTTP | Code | 적용 조건 |
 |---:|---|---|
 | 400 | `INVALID_REQUEST` | 필수 헤더·필드 누락, JSON 형식 또는 일반 필드 검증 실패 |
 | 400 | `INVALID_CHARGE_AMOUNT` | 충전 금액이 정수가 아니거나 0 이하이거나 signed `BIGINT` 범위 밖 |
-| 401 | `AUTHENTICATION_REQUIRED` | 보호 API의 토큰 누락·만료·위조 |
-| 401 | `INVALID_CREDENTIALS` | 로그인 이메일 또는 비밀번호 불일치 |
+| 404 | `USER_NOT_FOUND` | 충전·주문의 사용자 ID가 존재하지 않음 |
 | 404 | `MENU_NOT_FOUND` | 주문의 메뉴가 존재하지 않음 |
-| 409 | `EMAIL_ALREADY_EXISTS` | 가입 이메일 중복 |
 | 409 | `INSUFFICIENT_POINT` | 주문 결제 잔액 부족 |
 | 409 | `POINT_BALANCE_OVERFLOW` | 현재 잔액과 유효한 충전금액의 합이 signed `BIGINT` 범위를 초과 |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | 같은 사용자·작업의 같은 키에 다른 요청 내용 사용 |
@@ -426,9 +324,9 @@ JSON 원문, 공백과 필드 순서는 요청 해시 입력에 포함하지 않
 
 오류 응답의 `success`는 `false`, `data`는 `null`입니다. 예상하지 못한 오류의 내부 예외·SQL·자격 증명을 응답에 노출하지 않습니다.
 
-## 12. 외부 데이터 수집 API 계약
+## 10. 외부 데이터 수집 API 계약
 
-수신 시스템은 이 저장소에서 구현하지 않으며 통합 테스트에서는 JDK Mock HTTP API로 대체합니다. base URL은 기본값 없는 `COLLECTION_API_BASE_URL` 환경 변수로 주입하고 누락되거나 잘못되면 애플리케이션 시작이 실패합니다. 현재 범위에서는 인증 헤더를 전송하지 않습니다.
+수신 시스템은 이 저장소에서 구현하지 않으며 통합 테스트에서는 JDK Mock HTTP API로 대체합니다. base URL은 기본값 없는 `COLLECTION_API_BASE_URL` 환경 변수로 주입하고 누락되거나 잘못되면 애플리케이션 시작이 실패합니다. 현재 범위에서는 별도 자격 증명 헤더를 전송하지 않습니다.
 
 ### 요청
 
@@ -505,12 +403,10 @@ JSON 원문, 공백과 필드 순서는 요청 해시 입력에 포함하지 않
 
 `FAILED`에는 `failed_at`, 선택적인 `last_http_status`, `last_error_type`을 저장하고 응답 본문·stack trace는 저장하지 않습니다. 수동 재시도 API와 자동 정리 스케줄러는 현재 범위에 포함하지 않습니다.
 
-## 13. 입력 검증 규칙
+## 11. 입력 검증 규칙
 
-- 이메일은 앞뒤 공백을 제거한 뒤 `@NotBlank`, `@Email`, 최대 254자로 검증합니다. 저장한 대소문자는 유지하고 중복 비교는 대소문자를 무시합니다.
-- 비밀번호는 최소 8자·UTF-8 최대 72바이트입니다. 조합 규칙은 없고 앞뒤 공백은 거절하며 중간 공백은 허용합니다.
+- `userId`는 signed `BIGINT` 범위의 0보다 큰 정수여야 하며 존재하지 않으면 `USER_NOT_FOUND`입니다.
 - `Idempotency-Key`는 UUID 문자열만 허용하고 표준 소문자 문자열로 저장합니다.
 - 정의되지 않은 JSON 필드, 필수 필드의 누락·`null`, 문자열에서 숫자로의 자동 형 변환은 `INVALID_REQUEST`입니다.
-- 이메일 외의 문자열은 서버가 임의로 공백을 제거하지 않습니다.
 - 충전 `amount`가 정수가 아니거나 0 이하이거나 signed `BIGINT` 범위 밖이면 `INVALID_CHARGE_AMOUNT`입니다.
-- 인증·헤더·JSON·필드·충전 금액 검증 실패는 멱등 결과로 저장하지 않습니다.
+- 사용자 부재, 헤더·JSON·필드·충전 금액 검증 실패는 멱등 결과로 저장하지 않습니다.

@@ -21,11 +21,11 @@
 | [0005](./0005-establish-java-spring-mysql-platform-baseline.md) | Java·Spring·MySQL 플랫폼 기준선 확정 | 승인됨 |
 | [0006](./0006-use-feature-oriented-modular-monolith.md) | 기능 중심 모듈러 모놀리스 사용 | 승인됨 |
 | [0007](./0007-store-current-point-balance-without-ledger.md) | 포인트 원장 없이 현재 잔액 저장 | 대체됨 (→ 0016) |
-| [0008](./0008-use-stateless-jwt-access-token-authentication.md) | JWT Access Token 기반 무상태 인증 사용 | 승인됨 |
+| [0008](./0008-use-stateless-jwt-access-token-authentication.md) | JWT Access Token 기반 무상태 인증 사용 | 대체됨 (→ 0022) |
 | [0009](./0009-model-single-menu-orders-with-snapshots.md) | 단일 메뉴 주문과 주문 시점 스냅샷 사용 | 승인됨 |
 | [0010](./0010-test-against-mysql-with-docker-compose.md) | Docker Compose의 실제 MySQL로 통합 테스트 | 승인됨 |
 | [0011](./0011-return-temporary-unavailable-on-database-contention.md) | DB 경합 timeout과 deadlock에 일시적 오류 반환 | 승인됨 |
-| [0012](./0012-use-spring-security-for-jwt.md) | JWT 구현에 Spring Security 사용 | 승인됨 |
+| [0012](./0012-use-spring-security-for-jwt.md) | JWT 구현에 Spring Security 사용 | 대체됨 (→ 0022) |
 | [0013](./0013-use-actuator-and-micrometer-for-observability.md) | 관측성에 Actuator와 Micrometer 사용 | 승인됨 |
 | [0014](./0014-send-outbox-batches-asynchronously.md) | Outbox 배치를 비동기로 병렬 전송 | 승인됨 |
 | [0015](./0015-protect-mutations-with-idempotency-keys.md) | 충전과 주문에 멱등키 적용 | 승인됨 |
@@ -34,7 +34,8 @@
 | [0018](./0018-isolate-test-database-and-outbox-workers.md) | 테스트 데이터베이스와 Outbox 워커 격리 | 승인됨 |
 | [0019](./0019-use-spotless-as-format-gate.md) | Spotless를 코드 포맷 완료 게이트로 사용 | 승인됨 |
 | [0020](./0020-enforce-lifecycle-invariants-with-database-checks.md) | 상태 수명주기 불변식을 DB CHECK로 강제 | 승인됨 |
-| [0021](./0021-configure-stateless-bearer-security-boundary.md) | 무상태 Bearer REST 보안 경계 구성 | 승인됨 |
+| [0021](./0021-configure-stateless-bearer-security-boundary.md) | 무상태 Bearer REST 보안 경계 구성 | 대체됨 (→ 0022) |
+| [0022](./0022-accept-user-id-without-authentication.md) | 인증 없이 요청 본문의 사용자 ID 사용 | 승인됨 |
 
 ## 변경 규칙
 

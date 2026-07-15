@@ -8,13 +8,13 @@
 
 ## 과제 요구사항 대응
 
-원문 요구사항의 "사용자 식별값"은 보호 API에서 검증한 JWT의 `sub`에 대응합니다. 충전·주문 본문에는 `userId`를 받지 않아 다른 사용자의 ID를 지정하는 요청을 차단합니다. 회원가입과 로그인은 이 식별 계약을 제공하기 위한 보조 API입니다.
+원문 요구사항의 "사용자 식별값"은 충전·주문 요청 본문의 `userId`에 대응합니다. 사용자는 이미 존재한다고 가정하며 사용자 생성·인증은 현재 범위에 포함하지 않습니다. 존재하지 않는 `userId`는 `404 USER_NOT_FOUND`로 거절합니다.
 
 | 필수 기능 | Method·Path | 핵심 입력 | 성공 결과·정합성 |
 |---|---|---|---|
 | 커피 메뉴 목록 | `GET /api/v1/menus` | 없음 | 메뉴 ID·현재 이름·현재 가격을 ID 오름차순 반환 |
-| 포인트 충전 | `POST /api/v1/points/charge` | JWT, UUID `Idempotency-Key`, 양의 정수 `amount` | 사용자 행 락 안에서 잔액 증가와 멱등 결과를 함께 커밋 |
-| 커피 주문·결제 | `POST /api/v1/orders` | JWT, UUID `Idempotency-Key`, `menuId` | 포인트 차감·주문 스냅샷·Outbox·멱등 결과를 함께 커밋 |
+| 포인트 충전 | `POST /api/v1/points/charge` | 기존 `userId`, UUID `Idempotency-Key`, 양의 정수 `amount` | 사용자 행 락 안에서 잔액 증가와 멱등 결과를 함께 커밋 |
+| 커피 주문·결제 | `POST /api/v1/orders` | 기존 `userId`, UUID `Idempotency-Key`, `menuId` | 포인트 차감·주문 스냅샷·Outbox·멱등 결과를 함께 커밋 |
 | 인기 메뉴 | `GET /api/v1/menus/popular` | 없음 | 직전 7×24시간 `PAID` 주문 수 상위 3개 반환 |
 
 주문 데이터의 "실시간 전송"은 주문 API가 외부 응답을 기다리는 동기 호출이 아니다. 주문과 이벤트를 같은 트랜잭션에 보존한 뒤, 워커 정상·전송 가능한 기존 backlog 없음 조건에서 주문 커밋 후 2초 이내에 최초 외부 HTTP 요청을 시작하는 준실시간 Transactional Outbox 계약이다. 상세 필드·오류·재시도 계약은 [API 명세](./docs/api-spec.md)를 따른다.
@@ -30,8 +30,6 @@ erDiagram
 
     USERS {
         bigint id PK
-        varchar email "UNIQUE"
-        varchar password_hash
         bigint point_balance
     }
 
@@ -83,26 +81,24 @@ erDiagram
 | 주문과 외부 이벤트의 이중 쓰기 | 트랜잭션 안 동기 HTTP, 메모리 큐, Kafka, Transactional Outbox | MySQL Transactional Outbox | 주문과 이벤트를 원자적으로 보존하고 외부 장애를 고객 요청에서 분리함. 폴링·재시도 워커가 필요함 |
 | 다중 워커의 중복 점유와 늦은 갱신 | 단일 워커, 분산 락, `SKIP LOCKED`와 fencing | `SKIP LOCKED`, 30초 lease, `claim_token` | 여러 인스턴스가 작업을 나누고 만료된 워커의 상태 덮어쓰기를 막음. 외부 전달은 at-least-once임 |
 | 인기 메뉴 주문 수의 정확성 | 캐시·사전 집계, 이벤트 조회 모델, 주문 직접 집계 | 최근 `PAID` 주문 직접 집계 | 별도 집계 정합성 문제 없이 커밋된 주문과 즉시 일치함. 데이터 증가 시 쿼리 비용을 측정해야 함 |
-| 다중 인스턴스 사용자 식별 | 요청 본문 사용자 ID, 서버 세션, JWT | JWT `sub` | 인스턴스가 공유 세션 없이 독립 검증하고 다른 사용자 ID 지정 공격을 막음. 만료 전 강제 폐기는 지원하지 않음 |
+| 사용자 식별 | 요청 본문 사용자 ID, 별도 인증 API, JWT | 요청 본문 `userId` | 과제 원문의 입력 계약에 직접 대응하고 인증 범위를 추가하지 않음. 사용자 ID 소유권은 검증하지 않음 |
 | MySQL 고유 동작 검증 | H2, 저장소 mock, 실제 MySQL | 단일 Compose MySQL의 별도 테스트 DB | 실제 제품 동작을 검증하면서 개발 데이터와 전역 Outbox 워커의 간섭을 차단함. 테스트 DB 초기화가 추가됨 |
 
 ### 기술적 선택 이유
 
 | 기술 | 선택 이유 |
 |---|---|
-| Java 17·Spring Boot 4.1 | 현재 빌드 기준선을 유지하고 Web MVC·Security·JPA·Validation·Actuator 생태계를 일관되게 사용 |
+| Java 17·Spring Boot 4.1 | 현재 빌드 기준선을 유지하고 Web MVC·JPA·Validation·Actuator 생태계를 일관되게 사용 |
 | MySQL 8.4 LTS | 포인트·주문·멱등 결과·Outbox의 단일 진실 원천이자 행 락과 `SKIP LOCKED` 제공 |
 | Flyway | 스키마와 초기 메뉴를 코드와 함께 버전 관리하고 빈 DB 재현성을 확보 |
-| Spring Security·JWT | 검증된 Bearer 인증 흐름과 BCrypt·Nimbus 구현을 재사용해 직접 암호 구현을 피함 |
 | JDK `HttpClient`·Mock HTTP | 외부 전달과 테스트에 별도 HTTP 라이브러리를 추가하지 않고 표준 기능 사용 |
 | Actuator·Micrometer | API·DB 경합·Outbox backlog와 재시도를 같은 계측 방식으로 관찰 |
 | Spotless | Java 포맷을 `check` 완료 게이트에서 결정적으로 검사하고 필요할 때만 명시적으로 자동 수정 |
 
 ## 제품 범위
 
-- 이메일과 비밀번호로 가입하고 JWT Access Token으로 인증합니다.
-- 인증된 사용자가 자신의 포인트를 양의 정수만큼 충전합니다.
-- 인증된 사용자가 메뉴 하나를 포인트로 주문하고 결제합니다.
+- 기존 사용자 ID와 양의 정수 금액을 입력해 포인트를 충전합니다.
+- 기존 사용자 ID와 메뉴 ID를 입력해 메뉴 하나를 포인트로 주문하고 결제합니다.
 - 결제 완료 주문을 Transactional Outbox로 외부 데이터 수집 API에 전달하며 정상·backlog 없음 조건의 최초 요청은 커밋 후 2초 이내 시작합니다.
 - 조회 시점 직전 7×24시간 동안의 결제 완료 주문을 집계해 인기 메뉴 상위 3개를 반환합니다.
 
@@ -117,17 +113,18 @@ erDiagram
 | 주문 이벤트 전달 | 워커가 이벤트 선점 → DB 트랜잭션 밖에서 외부 호출 → 성공 또는 재시도 상태 저장 | `SKIP LOCKED`, `claim_token`, 30초 lease로 다중 워커의 갱신을 fencing |
 | 인기 메뉴 조회 | `PAID` 주문의 최근 7×24시간 주문 수 집계 → 현재 메뉴 정보 결합 | 주문 수는 `orders`, 응답 이름·가격은 현재 `menus`가 기준 |
 
-예상 가능한 비즈니스 실패는 해당 결과를 멱등 레코드에 저장하고 커밋합니다. DB 연결 실패, 5초 락 대기 timeout과 deadlock 같은 인프라 오류는 비즈니스 변경과 멱등 레코드를 모두 롤백하므로 같은 요청을 다시 시도할 수 있습니다. 자세한 상태 전이와 재사용 규칙은 [API 명세의 멱등성 계약](./docs/api-spec.md#10-멱등성-계약)을 따릅니다.
+예상 가능한 비즈니스 실패는 해당 결과를 멱등 레코드에 저장하고 커밋합니다. 존재하지 않는 사용자는 멱등 레코드를 만들기 전에 거절합니다. DB 연결 실패, 5초 락 대기 timeout과 deadlock 같은 인프라 오류는 비즈니스 변경과 멱등 레코드를 모두 롤백하므로 같은 요청을 다시 시도할 수 있습니다. 자세한 상태 전이와 재사용 규칙은 [API 명세의 멱등성 계약](./docs/api-spec.md#8-멱등성-계약)을 따릅니다.
 
 ## 핵심 불변식
 
 1. `users.point_balance`는 어떤 커밋 시점에도 음수가 될 수 없습니다.
 2. 같은 사용자의 충전과 결제는 사용자 행 비관적 락으로 직렬화합니다.
-3. 같은 사용자·작업 유형에서 하나의 `Idempotency-Key`는 하나의 요청 내용에만 대응합니다.
-4. 주문 한 건은 메뉴 하나만 포함하며, 주문 시점의 메뉴명과 결제금액은 변경하지 않습니다.
-5. 주문이 커밋되면 같은 트랜잭션에 대응하는 `ORDER_PAID` Outbox 이벤트가 정확히 하나 존재합니다.
-6. 외부 이벤트 전달은 at-least-once입니다. 수신 측은 `eventId`로 중복 반영을 방지해야 합니다.
-7. 인기 메뉴의 주문 수는 `PAID` 주문만 집계하고, 동률이면 메뉴 ID 오름차순으로 순위를 결정합니다.
+3. 충전·주문의 `userId`는 존재하는 `users.id`여야 하며 사용자 생성과 소유권 검증은 범위 밖입니다.
+4. 같은 사용자·작업 유형에서 하나의 `Idempotency-Key`는 하나의 요청 내용에만 대응합니다.
+5. 주문 한 건은 메뉴 하나만 포함하며, 주문 시점의 메뉴명과 결제금액은 변경하지 않습니다.
+6. 주문이 커밋되면 같은 트랜잭션에 대응하는 `ORDER_PAID` Outbox 이벤트가 정확히 하나 존재합니다.
+7. 외부 이벤트 전달은 at-least-once입니다. 수신 측은 `eventId`로 중복 반영을 방지해야 합니다.
+8. 인기 메뉴의 주문 수는 `PAID` 주문만 집계하고, 동률이면 메뉴 ID 오름차순으로 순위를 결정합니다.
 
 데이터 구조와 제약 조건은 [ERD](./docs/erd.md), 모듈과 트랜잭션 흐름은 [아키텍처](./docs/architecture.md)에 상세히 설명합니다.
 
@@ -136,12 +133,11 @@ erDiagram
 | 영역 | 확정 기준 |
 |---|---|
 | Java | Amazon Corretto 17 호환 Java 17 |
-| 애플리케이션 | Spring Boot 4.1.0, Spring Web MVC, Spring Security, Spring Data JPA |
+| 애플리케이션 | Spring Boot 4.1.0, Spring Web MVC, Spring Data JPA |
 | 입력 검증 | Spring Boot Validation |
 | 빌드 | Gradle 9.5.1 Wrapper |
 | 데이터베이스 | MySQL 8.4 LTS |
 | 스키마 변경 | Flyway (`flyway-core`, `flyway-mysql`) |
-| 인증 | Spring Security, BCrypt 비밀번호 해시, HS256 30분 JWT Access Token |
 | 테스트 | JUnit 5, 실제 MySQL 기반 통합 테스트, 외부 API Mock 서버 |
 | 관측성 | Spring Boot Actuator, Micrometer |
 | 코드 포맷 검사 | Gradle Spotless와 Java 포매터, `spotlessCheck`를 `check`에 포함 |
@@ -149,7 +145,7 @@ erDiagram
 
 버전 선택의 근거는 [ADR-0005](./docs/adr/0005-establish-java-spring-mysql-platform-baseline.md), 애플리케이션 구성 방식은 [ADR-0006](./docs/adr/0006-use-feature-oriented-modular-monolith.md)를 참고합니다.
 
-자동 구현 단계에서 추가가 승인된 애플리케이션 의존성은 `spring-boot-starter-validation`, `spring-boot-starter-oauth2-resource-server`, `spring-boot-starter-actuator`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`뿐입니다. 빌드 도구로는 Spotless 플러그인과 Java 포매터가 추가 승인됐습니다. Mock HTTP, 비동기 HTTP와 bounded polling은 JDK 표준 기능을 사용하고 다른 라이브러리는 추가 전에 다시 확인합니다.
+자동 구현 단계에서 추가가 승인된 애플리케이션 의존성은 `spring-boot-starter-validation`, `spring-boot-starter-actuator`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`뿐입니다. 빌드 도구로는 Spotless 플러그인과 Java 포매터가 추가 승인됐습니다. Mock HTTP, 비동기 HTTP와 bounded polling은 JDK 표준 기능을 사용하고 다른 라이브러리는 추가 전에 다시 확인합니다.
 
 ## 로컬 실행 계약
 
@@ -168,7 +164,7 @@ docker compose up -d --wait
 - 기본 개발 데이터베이스는 `coffee_order_system`, 테스트 데이터베이스는 `coffee_order_system_test`, 사용자명은 `coffee`입니다. DB 비밀번호에는 기본값이 없습니다.
 - 기존 로컬 MySQL과의 충돌을 피하기 위해 기본 호스트 포트는 `3307`입니다.
 - 개발 데이터베이스 이름과 JDBC URL은 `DB_NAME`, `DB_URL`, 테스트 데이터베이스 이름과 JDBC URL은 `TEST_DB_NAME`, `TEST_DB_URL`로 재정의할 수 있습니다. 호스트 포트는 `DB_PORT`, 사용자명은 `DB_USERNAME`, 비밀번호는 `DB_PASSWORD`, MySQL root 비밀번호는 `DB_ROOT_PASSWORD`로 재정의합니다.
-- JWT 서명 키는 `JWT_SECRET_BASE64`로 주입하며 Base64 디코딩 후 최소 32바이트여야 합니다. 외부 API 주소는 `COLLECTION_API_BASE_URL`로 주입합니다. 두 값에는 기본값이 없으며 누락되거나 잘못되면 애플리케이션 시작이 실패합니다.
+- 외부 API 주소는 `COLLECTION_API_BASE_URL`로 주입하며 기본값이 없습니다. 누락되거나 잘못되면 애플리케이션 시작이 실패합니다.
 - Outbox 워커 활성화 여부는 `OUTBOX_WORKER_ENABLED`, 폴링 주기와 배치 크기는 `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`로 설정하며 기본값은 각각 `true`, `1000`, `50`입니다.
 - 로컬에서는 저장소 루트의 `.env`를 Docker Compose와 Spring Boot가 함께 읽습니다. `.env`와 `.env.*`는 커밋하지 않고 키 목록과 안전한 예시만 `.env.example`로 관리합니다.
 - CI·운영에서는 `.env` 파일 대신 같은 이름의 시스템 환경 변수를 주입할 수 있으며, 시스템 환경 변수가 `.env` 값보다 우선합니다.
@@ -194,7 +190,7 @@ docker compose up -d --wait
 
 ### Architecture Decision Records
 
-활성 ADR은 프로젝트 소유자가 확인한 **승인됨(Accepted)** 상태입니다. ADR-0002와 0007은 각각 0015와 0016으로 대체됐습니다.
+활성 ADR은 프로젝트 소유자가 확인한 **승인됨(Accepted)** 상태입니다. ADR-0002와 0007은 각각 0015와 0016으로, 인증 관련 ADR-0008·0012·0021은 0022로 대체됐습니다.
 
 1. [ADR-0001: 포인트 변경에 DB 비관적 락 사용](./docs/adr/0001-use-database-pessimistic-locking-for-points.md)
 2. [ADR-0002: 충전과 주문에 멱등키 적용 — 대체됨](./docs/adr/0002-protect-mutations-with-idempotency-keys.md)
@@ -203,11 +199,11 @@ docker compose up -d --wait
 5. [ADR-0005: Java·Spring·MySQL 플랫폼 기준선 확립](./docs/adr/0005-establish-java-spring-mysql-platform-baseline.md)
 6. [ADR-0006: 기능 중심 모듈러 모놀리스 사용](./docs/adr/0006-use-feature-oriented-modular-monolith.md)
 7. [ADR-0007: 원장 없이 현재 포인트 잔액 저장 — 대체됨](./docs/adr/0007-store-current-point-balance-without-ledger.md)
-8. [ADR-0008: 무상태 JWT Access Token 인증 사용](./docs/adr/0008-use-stateless-jwt-access-token-authentication.md)
+8. [ADR-0008: 무상태 JWT Access Token 인증 사용 — 대체됨](./docs/adr/0008-use-stateless-jwt-access-token-authentication.md)
 9. [ADR-0009: 주문을 단일 메뉴와 스냅샷으로 모델링](./docs/adr/0009-model-single-menu-orders-with-snapshots.md)
 10. [ADR-0010: Docker Compose의 MySQL로 통합 테스트](./docs/adr/0010-test-against-mysql-with-docker-compose.md)
 11. [ADR-0011: DB 경합 timeout과 deadlock에 일시적 오류 반환](./docs/adr/0011-return-temporary-unavailable-on-database-contention.md)
-12. [ADR-0012: JWT 구현에 Spring Security 사용](./docs/adr/0012-use-spring-security-for-jwt.md)
+12. [ADR-0012: JWT 구현에 Spring Security 사용 — 대체됨](./docs/adr/0012-use-spring-security-for-jwt.md)
 13. [ADR-0013: 관측성에 Actuator와 Micrometer 사용](./docs/adr/0013-use-actuator-and-micrometer-for-observability.md)
 14. [ADR-0014: Outbox 배치를 비동기로 병렬 전송](./docs/adr/0014-send-outbox-batches-asynchronously.md)
 15. [ADR-0015: 충전과 주문에 멱등키 적용](./docs/adr/0015-protect-mutations-with-idempotency-keys.md)
@@ -216,7 +212,8 @@ docker compose up -d --wait
 18. [ADR-0018: 테스트 데이터베이스와 Outbox 워커 격리](./docs/adr/0018-isolate-test-database-and-outbox-workers.md)
 19. [ADR-0019: Spotless를 코드 포맷 완료 게이트로 사용](./docs/adr/0019-use-spotless-as-format-gate.md)
 20. [ADR-0020: 상태 수명주기 불변식을 DB CHECK로 강제](./docs/adr/0020-enforce-lifecycle-invariants-with-database-checks.md)
-21. [ADR-0021: 무상태 Bearer REST 보안 경계 구성](./docs/adr/0021-configure-stateless-bearer-security-boundary.md)
+21. [ADR-0021: 무상태 Bearer REST 보안 경계 구성 — 대체됨](./docs/adr/0021-configure-stateless-bearer-security-boundary.md)
+22. [ADR-0022: 인증 없이 요청 본문의 사용자 ID 사용](./docs/adr/0022-accept-user-id-without-authentication.md)
 
 ## 의도적으로 제외한 범위
 
@@ -225,7 +222,7 @@ docker compose up -d --wait
 - 다품목 주문, 수량, 장바구니
 - 주문 취소·환불
 - 포인트 원장
-- Refresh Token, 로그아웃 토큰 폐기, OAuth, 계정 복구
+- 사용자 생성·수정·삭제, 회원가입·로그인과 인증·인가
 - Redis·Kafka 기반 잠금 또는 인기 메뉴 사전 집계
 - 실제 클라우드 배포와 Kubernetes·Terraform
 
