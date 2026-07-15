@@ -1,0 +1,7 @@
+interface:
+  display_name: "자동 개발"
+  short_description: "문서 기반 이슈 생성부터 검증·push까지 자동 진행"
+  default_prompt: "$autodev를 사용해 승인된 문서 범위의 자동 개발 계획을 분석하고 실행 확인을 요청해 주세요."
+
+policy:
+  allow_implicit_invocation: false
