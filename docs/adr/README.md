@@ -15,12 +15,12 @@
 | 번호 | 결정 | 상태 |
 |---:|---|---|
 | [0001](./0001-use-database-pessimistic-locking-for-points.md) | 포인트 변경에 DB 비관적 락 사용 | 승인됨 |
-| [0002](./0002-protect-mutations-with-idempotency-keys.md) | 충전과 주문에 멱등키 적용 | 승인됨 |
+| [0002](./0002-protect-mutations-with-idempotency-keys.md) | 충전과 주문에 멱등키 적용 | 대체됨 (→ 0015) |
 | [0003](./0003-deliver-order-events-with-transactional-outbox.md) | 주문 이벤트를 Transactional Outbox로 전달 | 승인됨 |
 | [0004](./0004-calculate-popular-menus-from-paid-orders.md) | 인기 메뉴를 결제 완료 주문에서 직접 집계 | 승인됨 |
 | [0005](./0005-establish-java-spring-mysql-platform-baseline.md) | Java·Spring·MySQL 플랫폼 기준선 확정 | 승인됨 |
 | [0006](./0006-use-feature-oriented-modular-monolith.md) | 기능 중심 모듈러 모놀리스 사용 | 승인됨 |
-| [0007](./0007-store-current-point-balance-without-ledger.md) | 포인트 원장 없이 현재 잔액 저장 | 승인됨 |
+| [0007](./0007-store-current-point-balance-without-ledger.md) | 포인트 원장 없이 현재 잔액 저장 | 대체됨 (→ 0016) |
 | [0008](./0008-use-stateless-jwt-access-token-authentication.md) | JWT Access Token 기반 무상태 인증 사용 | 승인됨 |
 | [0009](./0009-model-single-menu-orders-with-snapshots.md) | 단일 메뉴 주문과 주문 시점 스냅샷 사용 | 승인됨 |
 | [0010](./0010-test-against-mysql-with-docker-compose.md) | Docker Compose의 실제 MySQL로 통합 테스트 | 승인됨 |
@@ -28,6 +28,9 @@
 | [0012](./0012-use-spring-security-for-jwt.md) | JWT 구현에 Spring Security 사용 | 승인됨 |
 | [0013](./0013-use-actuator-and-micrometer-for-observability.md) | 관측성에 Actuator와 Micrometer 사용 | 승인됨 |
 | [0014](./0014-send-outbox-batches-asynchronously.md) | Outbox 배치를 비동기로 병렬 전송 | 승인됨 |
+| [0015](./0015-protect-mutations-with-idempotency-keys.md) | 충전과 주문에 멱등키 적용 | 승인됨 |
+| [0016](./0016-store-positive-point-balance-without-arbitrary-cap.md) | 임의 상한 없이 현재 포인트 잔액 저장 | 승인됨 |
+| [0017](./0017-bound-first-outbox-attempt-latency.md) | Outbox 최초 전송 시도 시간을 제한 | 승인됨 |
 
 ## 변경 규칙
 

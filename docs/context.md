@@ -22,8 +22,8 @@
 | **User** | 사용자 | 이메일로 가입하고 포인트를 소유하며 커피를 주문하는 인증 주체 | `users`가 인증 정보와 현재 잔액의 기준 | Customer, Member |
 | **Menu** | 메뉴 | 주문할 수 있는 하나의 커피 상품과 현재 이름·포인트 가격 | 현재 표시 정보는 `menus`가 기준 | Product, Item |
 | **Point** | 포인트 | 커피 결제에 사용하는 정수 가치 단위. 1원은 1P | 부동소수점이 아닌 정수로 계산·저장 | Money, Credit |
-| **Point Balance** | 포인트 잔액 | 사용자가 현재 사용할 수 있는 포인트 총량 | `users.point_balance`; 0~10,000,000P | Wallet, Account balance |
-| **Point Charge** | 포인트 충전 | 인증 사용자의 잔액을 1~1,000,000P 증가시키는 행위 | 같은 사용자의 잔액 변경과 직렬화 | Deposit, Top-up |
+| **Point Balance** | 포인트 잔액 | 사용자가 현재 사용할 수 있는 포인트 총량 | `users.point_balance`; signed `BIGINT`의 0 이상 값 | Wallet, Account balance |
+| **Point Charge** | 포인트 충전 | 인증 사용자의 잔액을 양의 정수 포인트만큼 증가시키는 행위 | 같은 사용자의 잔액 변경과 직렬화, 덧셈 overflow 방지 | Deposit, Top-up |
 | **Order** | 주문 | 사용자가 메뉴 하나를 선택하고 포인트 결제를 완료한 구매 기록 | 현재 범위의 주문은 모두 `PAID` | Cart, Purchase |
 | **Paid Order** | 결제 완료 주문 | 포인트 차감과 주문 기록이 하나의 트랜잭션에서 함께 확정된 주문 | `orders.status = PAID` | Completed order |
 | **Order Snapshot** | 주문 스냅샷 | 주문 시점의 메뉴명과 실제 결제금액을 주문에 보존한 값 | `menu_name_snapshot`, `paid_amount`; 생성 후 불변 | Current menu data |
@@ -66,11 +66,11 @@ Point와 Order가 같은 `users` 행을 갱신하므로 둘 다 동일한 비관
 
 ### 포인트 충전
 
-인증·헤더·JSON과 충전 금액 범위 검증은 아래 DB 트랜잭션 전에 끝냅니다.
+인증·헤더·JSON과 충전금액이 signed `BIGINT` 범위의 양의 정수인지 검증하는 작업은 아래 DB 트랜잭션 전에 끝냅니다.
 
 1. 인증 사용자·작업 유형·`Idempotency-Key` 조합을 확인합니다.
 2. 요청 내용이 최초 요청과 같은지 비교합니다.
-3. 사용자 행을 비관적으로 잠그고 잔액을 증가시킵니다.
+3. 사용자 행을 비관적으로 잠그고 덧셈 overflow를 검사한 뒤 잔액을 증가시킵니다.
 4. 잔액 변경과 확정 응답을 같은 DB 트랜잭션으로 커밋합니다.
 
 ### 주문 및 결제
@@ -87,7 +87,7 @@ Point와 Order가 같은 `users` 행을 갱신하므로 둘 다 동일한 비관
 
 ### 외부 이벤트 전달
 
-외부 HTTP 호출은 주문 트랜잭션 밖에서 실행합니다. Outbox 워커는 `SKIP LOCKED`로 처리 가능한 행을 고르고 `claim_token`과 30초 lease로 소유권을 표시한 뒤, 선점 트랜잭션을 커밋하고 외부 API를 호출합니다. 완료 갱신은 같은 `event_id`와 `claim_token`을 가진 워커만 할 수 있어 lease가 만료된 이전 워커의 결과 덮어쓰기를 막습니다.
+외부 HTTP 호출은 주문 트랜잭션 밖에서 실행합니다. Outbox 워커는 `SKIP LOCKED`로 처리 가능한 행을 고르고 `claim_token`과 30초 lease로 소유권을 표시한 뒤, 선점 트랜잭션을 커밋하고 외부 API를 호출합니다. 워커 정상·전송 가능한 기존 backlog 없음 조건에서 주문 커밋 후 2초 이내에 최초 HTTP 요청을 시작합니다. 완료 갱신은 같은 `event_id`와 `claim_token`을 가진 워커만 할 수 있어 lease가 만료된 이전 워커의 결과 덮어쓰기를 막습니다.
 
 ## 시간과 보존 의미
 
@@ -99,6 +99,7 @@ Point와 Order가 같은 `users` 행을 갱신하므로 둘 다 동일한 비관
 | 인기 메뉴 구간 | `[조회 시각 - 7일, 조회 시각)`; 하한 포함, 상한 제외 |
 | 멱등 결과 | `completed_at`부터 최소 24시간 보존 후 삭제 가능 |
 | Outbox lease | 선점 후 30초 |
+| Outbox 최초 전송 | 워커 정상·전송 가능한 기존 backlog 없음 조건에서 주문 커밋 후 2초 이내 HTTP 요청 시작 |
 | `PUBLISHED` 이벤트 | 발행 완료 후 최소 30일 보존 뒤 삭제 가능 |
 | `FAILED` 이벤트 | 자동 삭제 없이 보존 |
 

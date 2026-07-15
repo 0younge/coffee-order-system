@@ -14,11 +14,11 @@
 | 요청·응답 Content-Type | `application/json` |
 | 보호 API 인증 | `Authorization: Bearer <access-token>` |
 | 충전·주문 멱등성 | UUID 문자열 `Idempotency-Key` 필수 |
-| 사용자 식별 | 요청 본문에서 받지 않고 인증 주체에서 추출 |
+| 사용자 식별 | 요청 본문에서 받지 않고 검증된 JWT의 `sub`에서 추출 |
 | 금액 단위 | 정수 포인트(P), 1원 = 1P |
 | 시간 | UTC 기준 ISO 8601 문자열(예: `2026-07-11T12:00:00Z`) |
 
-문서의 숫자 ID와 날짜는 예시일 뿐 고정값이 아닙니다. 이메일·비밀번호·멱등키의 구체적인 검증 규칙은 [입력 검증 규칙](#13-입력-검증-규칙)을 따릅니다. 알 수 없는 JSON 필드, 문자열에서 숫자로의 자동 형 변환, 필수 필드의 누락·`null`은 허용하지 않습니다.
+원문 요구사항의 "사용자 식별값"은 보호 API의 JWT `sub`에 대응합니다. 충전·주문 요청 본문에 `userId`를 받지 않으며, 알 수 없는 필드로 보내면 거절합니다. 문서의 숫자 ID와 날짜는 예시일 뿐 고정값이 아닙니다. 이메일·비밀번호·멱등키의 구체적인 검증 규칙은 [입력 검증 규칙](#13-입력-검증-규칙)을 따릅니다. 알 수 없는 JSON 필드, 문자열에서 숫자로의 자동 형 변환, 필수 필드의 누락·`null`은 허용하지 않습니다.
 
 ### 공통 응답 봉투
 
@@ -209,7 +209,7 @@ Idempotency-Key: 3f50f3c8-25c8-4a11-a182-2fb9f2d46e68
 
 | 필드 | 타입 | 필수 | 검증·의미 |
 |---|---|---:|---|
-| `amount` | integer | 예 | 1~1,000,000 충전 포인트. 소수·범위 밖 값 허용 안 함 |
+| `amount` | integer | 예 | signed `BIGINT` 범위의 0보다 큰 충전 포인트. 소수·범위 밖 값 허용 안 함 |
 
 ```json
 { "amount": 10000 }
@@ -239,8 +239,8 @@ Idempotency-Key: 3f50f3c8-25c8-4a11-a182-2fb9f2d46e68
 ### 실패 계약
 
 - 토큰 누락·만료·위조: `401 AUTHENTICATION_REQUIRED`
-- 금액이 정수가 아니거나 1 미만 또는 1,000,000 초과: `400 INVALID_CHARGE_AMOUNT`
-- 충전 후 잔액이 10,000,000P 초과: `409 POINT_BALANCE_LIMIT_EXCEEDED`
+- 금액이 정수가 아니거나 0 이하이거나 signed `BIGINT` 범위를 벗어남: `400 INVALID_CHARGE_AMOUNT`
+- 현재 잔액과 충전금액의 합이 signed `BIGINT` 범위를 벗어남: `409 POINT_BALANCE_OVERFLOW`
 - 필수 헤더·필드 누락 또는 그 밖의 형식 오류: `400 INVALID_REQUEST`
 - 같은 멱등키에 다른 `amount` 사용: `409 IDEMPOTENCY_KEY_REUSED`
 - DB 락 대기 5초 초과 또는 deadlock: `503 TEMPORARILY_UNAVAILABLE`
@@ -389,7 +389,7 @@ Idempotency-Key: 9324b129-5cc7-4fb2-8b8d-8a3c48617453
 ### 트랜잭션과 상태
 
 1. 멱등 레코드 생성, 포인트·주문 변경, 결과 저장은 해당 API의 하나의 DB 트랜잭션 안에서 처리합니다.
-2. 성공하거나 메뉴 부재·포인트 부족·보유 잔액 상한 초과로 결론 나면 결과 코드·HTTP 상태·응답 본문을 저장하고 `COMPLETED`로 전환한 뒤 커밋합니다.
+2. 성공하거나 메뉴 부재·포인트 부족·포인트 덧셈 overflow로 결론 나면 결과 코드·HTTP 상태·응답 본문을 저장하고 `COMPLETED`로 전환한 뒤 커밋합니다.
 3. 비즈니스 실패에서는 포인트·주문·Outbox를 변경하지 않지만 실패 멱등 결과는 커밋합니다.
 4. DB 연결·커밋 등 예상하지 못한 인프라 오류는 도메인 변경과 멱등 레코드를 모두 롤백합니다.
 5. DB 유일 제약으로 동시 최초 요청을 하나만 처리합니다. 승자 트랜잭션이 커밋되면 같은 요청은 그 결과를 재사용하고, 승자가 롤백되면 후속 요청이 다시 처리할 수 있습니다.
@@ -410,13 +410,13 @@ JSON 원문, 공백과 필드 순서는 요청 해시 입력에 포함하지 않
 | HTTP | Code | 적용 조건 |
 |---:|---|---|
 | 400 | `INVALID_REQUEST` | 필수 헤더·필드 누락, JSON 형식 또는 일반 필드 검증 실패 |
-| 400 | `INVALID_CHARGE_AMOUNT` | 충전 금액이 정수가 아니거나 1~1,000,000 범위 밖 |
+| 400 | `INVALID_CHARGE_AMOUNT` | 충전 금액이 정수가 아니거나 0 이하이거나 signed `BIGINT` 범위 밖 |
 | 401 | `AUTHENTICATION_REQUIRED` | 보호 API의 토큰 누락·만료·위조 |
 | 401 | `INVALID_CREDENTIALS` | 로그인 이메일 또는 비밀번호 불일치 |
 | 404 | `MENU_NOT_FOUND` | 주문의 메뉴가 존재하지 않음 |
 | 409 | `EMAIL_ALREADY_EXISTS` | 가입 이메일 중복 |
 | 409 | `INSUFFICIENT_POINT` | 주문 결제 잔액 부족 |
-| 409 | `POINT_BALANCE_LIMIT_EXCEEDED` | 충전 후 잔액이 10,000,000P를 초과 |
+| 409 | `POINT_BALANCE_OVERFLOW` | 현재 잔액과 유효한 충전금액의 합이 signed `BIGINT` 범위를 초과 |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | 같은 사용자·작업의 같은 키에 다른 요청 내용 사용 |
 | 500 | `INTERNAL_SERVER_ERROR` | 예상하지 못한 서버·인프라 오류 |
 | 503 | `TEMPORARILY_UNAVAILABLE` | DB 락 대기 5초 초과 또는 deadlock |
@@ -461,6 +461,7 @@ JSON 원문, 공백과 필드 순서는 요청 해시 입력에 포함하지 않
 4. 결과 갱신은 `event_id`, 현재 `claim_token`, `PROCESSING` 상태가 모두 일치할 때만 수행합니다.
 5. 30초 lease가 만료된 이벤트는 다른 워커가 새 `claim_token`으로 다시 선점할 수 있습니다. 이전 워커는 더 이상 결과를 덮어쓸 수 없습니다.
 6. 워커는 활성 배치가 없을 때 기본 1초마다 `next_retry_at`, `created_at`, `event_id` 오름차순으로 최대 50건을 선점하고 JDK 비동기 HTTP 클라이언트로 병렬 전송합니다.
+7. 워커가 정상이고 전송 가능한 기존 backlog가 없으면 주문 커밋 후 2초 이내에 최초 외부 HTTP 요청을 시작합니다. 이 기준은 외부 응답 완료나 `PUBLISHED` 전환 시간이 아닙니다.
 
 ### timeout과 응답 분류
 
@@ -483,7 +484,7 @@ JSON 원문, 공백과 필드 순서는 요청 해시 입력에 포함하지 않
 
 | 시도 | 실행 시점 | 재시도 가능 오류가 발생하면 |
 |---:|---|---|
-| 1 | 주문 트랜잭션 커밋 후 가능한 즉시 | 1분 뒤 시도 2 예약 |
+| 1 | 주문 커밋과 동시에 전송 가능, 정상·backlog 없음 조건에서 2초 이내 요청 시작 | 1분 뒤 시도 2 예약 |
 | 2 | 시도 1 실패 후 1분 | 5분 뒤 시도 3 예약 |
 | 3 | 시도 2 실패 후 5분 | 30분 뒤 시도 4 예약 |
 | 4 | 시도 3 실패 후 30분 | `FAILED` 전환 |
@@ -508,5 +509,5 @@ JSON 원문, 공백과 필드 순서는 요청 해시 입력에 포함하지 않
 - `Idempotency-Key`는 UUID 문자열만 허용하고 표준 소문자 문자열로 저장합니다.
 - 정의되지 않은 JSON 필드, 필수 필드의 누락·`null`, 문자열에서 숫자로의 자동 형 변환은 `INVALID_REQUEST`입니다.
 - 이메일 외의 문자열은 서버가 임의로 공백을 제거하지 않습니다.
-- 충전 `amount`가 정수가 아니거나 1~1,000,000 범위 밖이면 `INVALID_CHARGE_AMOUNT`입니다.
+- 충전 `amount`가 정수가 아니거나 0 이하이거나 signed `BIGINT` 범위 밖이면 `INVALID_CHARGE_AMOUNT`입니다.
 - 인증·헤더·JSON·필드·충전 금액 검증 실패는 멱등 결과로 저장하지 않습니다.
