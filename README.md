@@ -190,30 +190,7 @@ docker compose up -d --wait
 
 ### Architecture Decision Records
 
-활성 ADR은 프로젝트 소유자가 확인한 **승인됨(Accepted)** 상태입니다. ADR-0002와 0007은 각각 0015와 0016으로, 인증 관련 ADR-0008·0012·0021은 0022로 대체됐습니다.
-
-1. [ADR-0001: 포인트 변경에 DB 비관적 락 사용](./docs/adr/0001-use-database-pessimistic-locking-for-points.md)
-2. [ADR-0002: 충전과 주문에 멱등키 적용 — 대체됨](./docs/adr/0002-protect-mutations-with-idempotency-keys.md)
-3. [ADR-0003: 주문 이벤트를 Transactional Outbox로 전달](./docs/adr/0003-deliver-order-events-with-transactional-outbox.md)
-4. [ADR-0004: 인기 메뉴를 결제 완료 주문에서 직접 집계](./docs/adr/0004-calculate-popular-menus-from-paid-orders.md)
-5. [ADR-0005: Java·Spring·MySQL 플랫폼 기준선 확립](./docs/adr/0005-establish-java-spring-mysql-platform-baseline.md)
-6. [ADR-0006: 기능 중심 모듈러 모놀리스 사용](./docs/adr/0006-use-feature-oriented-modular-monolith.md)
-7. [ADR-0007: 원장 없이 현재 포인트 잔액 저장 — 대체됨](./docs/adr/0007-store-current-point-balance-without-ledger.md)
-8. [ADR-0008: 무상태 JWT Access Token 인증 사용 — 대체됨](./docs/adr/0008-use-stateless-jwt-access-token-authentication.md)
-9. [ADR-0009: 주문을 단일 메뉴와 스냅샷으로 모델링](./docs/adr/0009-model-single-menu-orders-with-snapshots.md)
-10. [ADR-0010: Docker Compose의 MySQL로 통합 테스트](./docs/adr/0010-test-against-mysql-with-docker-compose.md)
-11. [ADR-0011: DB 경합 timeout과 deadlock에 일시적 오류 반환](./docs/adr/0011-return-temporary-unavailable-on-database-contention.md)
-12. [ADR-0012: JWT 구현에 Spring Security 사용 — 대체됨](./docs/adr/0012-use-spring-security-for-jwt.md)
-13. [ADR-0013: 관측성에 Actuator와 Micrometer 사용](./docs/adr/0013-use-actuator-and-micrometer-for-observability.md)
-14. [ADR-0014: Outbox 배치를 비동기로 병렬 전송](./docs/adr/0014-send-outbox-batches-asynchronously.md)
-15. [ADR-0015: 충전과 주문에 멱등키 적용](./docs/adr/0015-protect-mutations-with-idempotency-keys.md)
-16. [ADR-0016: 임의 상한 없이 현재 포인트 잔액 저장](./docs/adr/0016-store-positive-point-balance-without-arbitrary-cap.md)
-17. [ADR-0017: Outbox 최초 전송 시도 시간을 제한](./docs/adr/0017-bound-first-outbox-attempt-latency.md)
-18. [ADR-0018: 테스트 데이터베이스와 Outbox 워커 격리](./docs/adr/0018-isolate-test-database-and-outbox-workers.md)
-19. [ADR-0019: Spotless를 코드 포맷 완료 게이트로 사용](./docs/adr/0019-use-spotless-as-format-gate.md)
-20. [ADR-0020: 상태 수명주기 불변식을 DB CHECK로 강제](./docs/adr/0020-enforce-lifecycle-invariants-with-database-checks.md)
-21. [ADR-0021: 무상태 Bearer REST 보안 경계 구성 — 대체됨](./docs/adr/0021-configure-stateless-bearer-security-boundary.md)
-22. [ADR-0022: 인증 없이 요청 본문의 사용자 ID 사용](./docs/adr/0022-accept-user-id-without-authentication.md)
+결정과 상태의 정본은 [ADR 목록](./docs/adr/)에서 관리합니다. 대체된 결정은 구현 계약으로 사용하지 않으며, 새 구조 결정을 추가하거나 기존 결정을 뒤집을 때는 새 ADR로 이력을 남깁니다.
 
 ## 의도적으로 제외한 범위
 

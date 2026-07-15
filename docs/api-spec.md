@@ -11,7 +11,8 @@
 | 항목 | 계약 |
 |---|---|
 | Base path | `/api/v1` |
-| 요청·응답 Content-Type | `application/json` |
+| 요청 Content-Type | 본문이 있는 `POST`는 `application/json`; 본문 없는 `GET`은 요구하지 않음 |
+| 응답 Content-Type | 모든 API 응답은 `application/json` |
 | 충전·주문 멱등성 | UUID 문자열 `Idempotency-Key` 필수 |
 | 사용자 식별 | 충전·주문 요청 본문의 기존 사용자 `userId` |
 | 금액 단위 | 정수 포인트(P), 1원 = 1P |
@@ -20,6 +21,18 @@
 원문 요구사항의 "사용자 식별값"은 충전·주문 요청 본문의 `userId`에 대응합니다. `userId`는 시스템에 이미 존재하는 사용자를 가리켜야 하며 사용자 생성과 소유권 검증은 현재 범위에 포함하지 않습니다. 문서의 숫자 ID와 날짜는 예시일 뿐 고정값이 아닙니다. 사용자 ID와 멱등키의 구체적인 검증 규칙은 [입력 검증 규칙](#11-입력-검증-규칙)을 따릅니다. 알 수 없는 JSON 필드, 문자열에서 숫자로의 자동 형 변환, 필수 필드의 누락·`null`은 허용하지 않습니다.
 
 모든 업무 API는 별도 인증 없이 호출합니다. Actuator는 상세 정보를 숨긴 health endpoint만 HTTP에 노출합니다.
+
+### 입력 검증과 오류 우선순위
+
+복합 오류에서도 구현과 테스트 결과가 달라지지 않도록 다음 순서를 사용합니다.
+
+1. HTTP 헤더·`Content-Type`·JSON 문법·필수 필드·필드 타입과 숫자 범위를 검증합니다. 지원하지 않는 요청 미디어 타입은 `415`, 나머지 검증 실패는 `400`이며 DB를 조회하거나 멱등 결과를 저장하지 않습니다.
+2. 충전·주문의 기존 사용자를 확인합니다. 없으면 `404 USER_NOT_FOUND`이며 멱등 결과를 저장하지 않습니다.
+3. 멱등키를 선점하거나 완료 결과를 재사용합니다. 같은 키의 요청 지문이 다르면 이후 업무 규칙을 확인하지 않고 `409 IDEMPOTENCY_KEY_REUSED`를 반환합니다.
+4. 최초 요청만 업무 규칙을 검사합니다. 주문은 메뉴 존재 여부를 먼저, 포인트 잔액을 다음으로 확인합니다. 충전은 사용자 행을 잠근 뒤 덧셈 overflow를 확인합니다.
+5. DB timeout·deadlock과 예상하지 못한 인프라 오류는 앞선 공개 오류가 확정되지 않은 경우에만 해당 오류 계약으로 변환합니다.
+
+따라서 주문에서 사용자와 메뉴가 모두 없으면 `USER_NOT_FOUND`, 멱등키가 재사용됐고 메뉴도 없으면 `IDEMPOTENCY_KEY_REUSED`, 메뉴가 없고 잔액도 부족하면 `MENU_NOT_FOUND`가 우선합니다. 완료된 같은 멱등 요청은 현재 업무 상태를 다시 검사하지 않고 저장된 최초 결과를 반환합니다.
 
 ### 공통 응답 봉투
 
@@ -169,7 +182,7 @@ Idempotency-Key: 9324b129-5cc7-4fb2-8b8d-8a3c48617453
 | 필드 | 타입 | 필수 | 검증·의미 |
 |---|---|---:|---|
 | `userId` | integer | 예 | signed `BIGINT` 범위의 0보다 큰 기존 사용자 ID |
-| `menuId` | integer | 예 | 주문할 메뉴 하나의 ID. 존재하지 않으면 `MENU_NOT_FOUND` |
+| `menuId` | integer | 예 | signed `BIGINT` 범위의 0보다 큰 메뉴 ID. 존재하지 않으면 `MENU_NOT_FOUND` |
 
 ```json
 { "userId": 1, "menuId": 1 }
@@ -314,6 +327,7 @@ JSON 원문, 공백과 필드 순서는 요청 해시 입력에 포함하지 않
 |---:|---|---|
 | 400 | `INVALID_REQUEST` | 필수 헤더·필드 누락, JSON 형식 또는 일반 필드 검증 실패 |
 | 400 | `INVALID_CHARGE_AMOUNT` | 충전 금액이 정수가 아니거나 0 이하이거나 signed `BIGINT` 범위 밖 |
+| 415 | `UNSUPPORTED_MEDIA_TYPE` | 본문이 있는 요청의 `Content-Type`이 `application/json`이 아님 |
 | 404 | `USER_NOT_FOUND` | 충전·주문의 사용자 ID가 존재하지 않음 |
 | 404 | `MENU_NOT_FOUND` | 주문의 메뉴가 존재하지 않음 |
 | 409 | `INSUFFICIENT_POINT` | 주문 결제 잔액 부족 |
@@ -406,6 +420,7 @@ JSON 원문, 공백과 필드 순서는 요청 해시 입력에 포함하지 않
 ## 11. 입력 검증 규칙
 
 - `userId`는 signed `BIGINT` 범위의 0보다 큰 정수여야 하며 존재하지 않으면 `USER_NOT_FOUND`입니다.
+- `menuId`는 signed `BIGINT` 범위의 0보다 큰 정수여야 하며 범위 안에 있지만 존재하지 않으면 `MENU_NOT_FOUND`입니다.
 - `Idempotency-Key`는 UUID 문자열만 허용하고 표준 소문자 문자열로 저장합니다.
 - 정의되지 않은 JSON 필드, 필수 필드의 누락·`null`, 문자열에서 숫자로의 자동 형 변환은 `INVALID_REQUEST`입니다.
 - 충전 `amount`가 정수가 아니거나 0 이하이거나 signed `BIGINT` 범위 밖이면 `INVALID_CHARGE_AMOUNT`입니다.
