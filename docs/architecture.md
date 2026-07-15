@@ -367,6 +367,7 @@ MySQL 자체 장애 시 쓰기 API는 성공으로 가장하지 않는다. MySQL
 - HTTP에는 상세 정보를 숨긴 Actuator health endpoint만 노출한다. 지표 endpoint, 외부 exporter와 알림 연동은 배포 환경 확정 후 정한다.
 - `FAILED` 이벤트, 오래된 `PENDING`, deadlock, 락 timeout, DB 풀 고갈은 알림 후보이며 수치 임계값은 성능 기준과 함께 합의한다.
 - JWT 서명 키는 `JWT_SECRET_BASE64`, 외부 API 주소는 `COLLECTION_API_BASE_URL`로 주입하며 둘 다 기본값을 두지 않는다. DB 자격 증명과 함께 저장소에 커밋하지 않는다.
+- 로컬 실행은 저장소 루트의 추적하지 않는 `.env`를 사용하고, 필요한 키와 안전한 예시는 `.env.example`로 공유한다. CI·운영은 같은 키의 시스템 환경 변수를 주입하며 이 값이 `.env`보다 우선한다.
 
 ## 18. 구현 후 측정할 운영 기준
 

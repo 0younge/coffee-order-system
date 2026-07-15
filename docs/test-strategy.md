@@ -251,6 +251,8 @@ Mock 서버는 테스트마다 수신 기록과 응답 스크립트를 초기화
 표준 로컬 실행 흐름은 다음과 같다.
 
 ```bash
+cp .env.example .env
+# .env의 비밀번호와 비밀값을 실행 환경에 맞게 변경
 docker compose config
 docker compose up -d
 ./gradlew test
@@ -259,7 +261,7 @@ docker compose up -d
 ./gradlew bootRun
 ```
 
-`bootRun` 검증 전 실행 환경에 `JWT_SECRET_BASE64`와 `COLLECTION_API_BASE_URL`을 설정한다.
+로컬 실행에서는 `.env.example`을 `.env`로 복사해 필요한 비밀값을 설정한다. CI·운영에서는 파일 대신 같은 이름의 환경 변수를 주입할 수 있다.
 
 - `docker compose ps` 또는 health check로 MySQL 준비 완료를 확인한 뒤 테스트를 시작한다.
 - `./gradlew test` 결과는 전체 테스트 수, 성공, 실패, 제외 수를 그대로 보고한다.

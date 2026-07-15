@@ -60,16 +60,20 @@
 다음 순서로 Docker Compose의 MySQL 8.4 LTS 인스턴스를 준비한 뒤 테스트하고 애플리케이션을 실행합니다.
 
 ```bash
+cp .env.example .env
+# .env의 비밀번호와 비밀값을 실행 환경에 맞게 변경
 docker compose up -d --wait
 ./gradlew test
 ./gradlew bootRun
 ```
 
 - Docker Compose에는 MySQL 서비스만 포함합니다. 애플리케이션 컨테이너는 만들지 않습니다.
-- 기본 데이터베이스는 `coffee_order_system`, 사용자명과 비밀번호는 `coffee`입니다.
+- 기본 데이터베이스는 `coffee_order_system`, 사용자명은 `coffee`입니다. DB 비밀번호에는 기본값이 없습니다.
 - 기존 로컬 MySQL과의 충돌을 피하기 위해 기본 호스트 포트는 `3307`입니다.
 - 데이터베이스 이름은 `DB_NAME`, 호스트 포트는 `DB_PORT`, 애플리케이션 JDBC URL은 `DB_URL`, 사용자명은 `DB_USERNAME`, 비밀번호는 `DB_PASSWORD`로 재정의할 수 있습니다. MySQL root 비밀번호는 `DB_ROOT_PASSWORD`로 재정의합니다.
 - JWT 서명 키는 `JWT_SECRET_BASE64`로 주입하며 Base64 디코딩 후 최소 32바이트여야 합니다. 외부 API 주소는 `COLLECTION_API_BASE_URL`로 주입합니다. 두 값에는 기본값이 없으며 누락되거나 잘못되면 애플리케이션 시작이 실패합니다.
+- 로컬에서는 저장소 루트의 `.env`를 Docker Compose와 Spring Boot가 함께 읽습니다. `.env`와 `.env.*`는 커밋하지 않고 키 목록과 안전한 예시만 `.env.example`로 관리합니다.
+- CI·운영에서는 `.env` 파일 대신 같은 이름의 시스템 환경 변수를 주입할 수 있으며, 시스템 환경 변수가 `.env` 값보다 우선합니다.
 - Flyway 구현 후 애플리케이션 시작 시 스키마와 초기 메뉴를 적용합니다.
 - 통합 테스트는 인메모리 DB로 대체하지 않고 실제 MySQL과의 SQL·락·제약 조건 동작을 검증합니다.
 
