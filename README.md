@@ -8,7 +8,7 @@
 
 ## 과제 요구사항 대응
 
-원문 요구사항의 "사용자 식별값"은 충전·주문 요청 본문의 `userId`에 대응합니다. 사용자는 이미 존재한다고 가정하며 사용자 생성·인증은 현재 범위에 포함하지 않습니다. 존재하지 않는 `userId`는 `404 USER_NOT_FOUND`로 거절합니다.
+원문 요구사항의 "사용자 식별값"은 충전·주문 요청 본문의 `userId`에 대응합니다. 사용자는 이미 존재한다고 가정하며 사용자 생성·인증은 현재 범위에 포함하지 않습니다. 과제·로컬 수동 검증에는 Flyway가 준비하는 기준 사용자 `userId=1`, 초기 잔액 `0P`를 사용하고, 존재하지 않는 `userId`는 `404 USER_NOT_FOUND`로 거절합니다.
 
 | 필수 기능 | Method·Path | 핵심 입력 | 성공 결과·정합성 |
 |---|---|---|---|
@@ -17,7 +17,7 @@
 | 커피 주문·결제 | `POST /api/v1/orders` | 기존 `userId`, UUID `Idempotency-Key`, `menuId` | 포인트 차감·주문 스냅샷·Outbox·멱등 결과를 함께 커밋 |
 | 인기 메뉴 | `GET /api/v1/menus/popular` | 없음 | 직전 7×24시간 `PAID` 주문 수 상위 3개 반환 |
 
-주문 데이터의 "실시간 전송"은 주문 API가 외부 응답을 기다리는 동기 호출이 아니다. 주문과 이벤트를 같은 트랜잭션에 보존한 뒤, 워커 정상·전송 가능한 기존 backlog 없음 조건에서 주문 커밋 후 2초 이내에 최초 외부 HTTP 요청을 시작하는 준실시간 Transactional Outbox 계약이다. 상세 필드·오류·재시도 계약은 [API 명세](./docs/api-spec.md)를 따른다.
+주문 데이터의 "실시간 전송" 요구는 정합성과 외부 장애 격리를 함께 지키는 준실시간 Transactional Outbox로 구체화한다. 주문 API는 외부 응답을 기다리지 않으며 주문과 이벤트를 같은 트랜잭션에 보존한 뒤, 워커 정상·전송 가능한 기존 backlog 없음 조건에서 주문 커밋 후 2초 이내에 최초 외부 HTTP 요청을 시작한다. 상세 필드·오류·재시도 계약은 [API 명세](./docs/api-spec.md)를 따른다.
 
 ### 핵심 ERD
 
@@ -90,9 +90,9 @@ erDiagram
 |---|---|
 | Java 17·Spring Boot 4.1 | 현재 빌드 기준선을 유지하고 Web MVC·JPA·Validation·Actuator 생태계를 일관되게 사용 |
 | MySQL 8.4 LTS | 포인트·주문·멱등 결과·Outbox의 단일 진실 원천이자 행 락과 `SKIP LOCKED` 제공 |
-| Flyway | 스키마와 초기 메뉴를 코드와 함께 버전 관리하고 빈 DB 재현성을 확보 |
+| Flyway | 스키마·초기 메뉴·과제용 기준 사용자를 코드와 함께 버전 관리하고 빈 DB 재현성을 확보 |
 | JDK `HttpClient`·Mock HTTP | 외부 전달과 테스트에 별도 HTTP 라이브러리를 추가하지 않고 표준 기능 사용 |
-| Actuator·Micrometer | API·DB 경합·Outbox backlog와 재시도를 같은 계측 방식으로 관찰 |
+| Actuator·Micrometer | 기본 HTTP·HikariCP 지표와 최소한의 DB 경합·Outbox 사용자 정의 지표를 같은 방식으로 관찰 |
 | Spotless | Java 포맷을 `check` 완료 게이트에서 결정적으로 검사하고 필요할 때만 명시적으로 자동 수정 |
 
 ## 제품 범위
@@ -147,6 +147,8 @@ erDiagram
 
 자동 구현 단계에서 추가가 승인된 애플리케이션 의존성은 `spring-boot-starter-validation`, `spring-boot-starter-actuator`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`뿐입니다. 빌드 도구로는 Spotless 플러그인과 Java 포매터가 추가 승인됐습니다. Mock HTTP, 비동기 HTTP와 bounded polling은 JDK 표준 기능을 사용하고 다른 라이브러리는 추가 전에 다시 확인합니다.
 
+첫 구현의 관측성은 Spring MVC의 `http.server.requests`, HikariCP 기본 지표, DB lock timeout·deadlock 카운터, Outbox 전송 결과·재시도·최종 실패·fencing 거절 카운터, `PENDING`·`FAILED` 건수와 가장 오래된 대기 이벤트 시간 gauge로 제한합니다. 요청·사용자·주문·이벤트 ID는 key-value 로그로 연결합니다. HTTP에는 상세 정보를 숨긴 `/actuator/health`만 노출하고 외부 exporter, JSON 로그 라이브러리와 알림 규칙은 추가하지 않습니다.
+
 ## 로컬 실행 계약
 
 다음 순서로 Docker Compose의 MySQL 8.4 LTS 인스턴스를 준비한 뒤 테스트하고 애플리케이션을 실행합니다.
@@ -162,13 +164,15 @@ docker compose up -d --wait
 
 - Docker Compose에는 MySQL 서비스만 포함합니다. 애플리케이션 컨테이너는 만들지 않습니다.
 - 기본 개발 데이터베이스는 `coffee_order_system`, 테스트 데이터베이스는 `coffee_order_system_test`, 사용자명은 `coffee`입니다. DB 비밀번호에는 기본값이 없습니다.
+- 자동 구현은 멱등적인 `docker/mysql/init/01-create-test-database.sh`를 MySQL 초기화 디렉터리에 연결해 신규 볼륨에서 테스트 데이터베이스와 애플리케이션 사용자 권한을 자동 준비해야 합니다.
+- 기존 볼륨에 테스트 데이터베이스가 없다면 구현된 초기화 스크립트를 `docker compose exec mysql bash /docker-entrypoint-initdb.d/01-create-test-database.sh`로 한 번 실행합니다. 이 절차는 데이터베이스와 권한을 멱등적으로 준비하며 볼륨이나 개발 데이터를 삭제하지 않습니다.
 - 기존 로컬 MySQL과의 충돌을 피하기 위해 기본 호스트 포트는 `3307`입니다.
 - 개발 데이터베이스 이름과 JDBC URL은 `DB_NAME`, `DB_URL`, 테스트 데이터베이스 이름과 JDBC URL은 `TEST_DB_NAME`, `TEST_DB_URL`로 재정의할 수 있습니다. 호스트 포트는 `DB_PORT`, 사용자명은 `DB_USERNAME`, 비밀번호는 `DB_PASSWORD`, MySQL root 비밀번호는 `DB_ROOT_PASSWORD`로 재정의합니다.
 - 외부 API 주소는 `COLLECTION_API_BASE_URL`로 주입하며 기본값이 없습니다. 누락되거나 잘못되면 애플리케이션 시작이 실패합니다.
 - Outbox 워커 활성화 여부는 `OUTBOX_WORKER_ENABLED`, 폴링 주기와 배치 크기는 `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`로 설정하며 기본값은 각각 `true`, `1000`, `50`입니다.
 - 로컬에서는 저장소 루트의 `.env`를 Docker Compose와 Spring Boot가 함께 읽습니다. `.env`와 `.env.*`는 커밋하지 않고 키 목록과 안전한 예시만 `.env.example`로 관리합니다.
 - CI·운영에서는 `.env` 파일 대신 같은 이름의 시스템 환경 변수를 주입할 수 있으며, 시스템 환경 변수가 `.env` 값보다 우선합니다.
-- Flyway 구현 후 애플리케이션 시작 시 스키마와 초기 메뉴를 적용합니다.
+- Flyway 구현 후 애플리케이션 시작 시 스키마, 초기 메뉴와 과제·로컬용 기준 사용자 `id=1`, `point_balance=0`을 적용합니다.
 - 통합 테스트는 인메모리 DB로 대체하지 않고 실제 MySQL과의 SQL·락·제약 조건 동작을 검증합니다.
 - 개발과 테스트는 같은 Compose MySQL 인스턴스를 사용하되 서로 다른 데이터베이스를 사용합니다. 일반 테스트에서는 Outbox 워커를 비활성화하고 Outbox 전용 테스트에서만 활성화합니다.
 - 테스트는 고유 데이터만 FK 순서로 정리합니다. 전체 `TRUNCATE`, schema 삭제와 `Flyway clean`은 사용하지 않습니다.

@@ -36,6 +36,12 @@
 | [0020](./0020-enforce-lifecycle-invariants-with-database-checks.md) | 상태 수명주기 불변식을 DB CHECK로 강제 | 승인됨 |
 | [0021](./0021-configure-stateless-bearer-security-boundary.md) | 무상태 Bearer REST 보안 경계 구성 | 대체됨 (→ 0022) |
 | [0022](./0022-accept-user-id-without-authentication.md) | 인증 없이 요청 본문의 사용자 ID 사용 | 승인됨 |
+| [0023](./0023-define-outbox-field-lifecycle.md) | Outbox 상태별 필드 수명주기 확정 | 승인됨 |
+| [0024](./0024-seed-reference-user-for-local-execution.md) | 과제와 로컬 실행용 기준 사용자 seed | 승인됨 |
+
+ADR 0022는 인증 결정을 직접 다룬 0008·0012·0021을 완전히 대체한다. 또한 0005의 Spring Security 기준선, 0006의 Auth 모듈, 0015의 인증 실패 예외, 0018의 공유 JWT 키 조건을 부분 대체한다. 이 조항들은 구현 계약으로 사용하지 않으며 각 ADR의 나머지 결정만 유지한다.
+
+ADR 0024는 ADR 0022의 기존 사용자 준비 절차 제외 조항만 부분 대체한다. 사용자 생성·관리 API와 인증·인가 제외, 요청 본문의 기존 `userId` 사용은 그대로 유지한다.
 
 ## 변경 규칙
 
