@@ -94,6 +94,8 @@ class BuildConfigurationTest {
     String lifecycleMigration =
         Files.readString(
             Path.of("src/main/resources/db/migration/V2__make_lifecycle_codes_case_sensitive.sql"));
+    String outboxClaimMigration =
+        Files.readString(Path.of("src/main/resources/db/migration/V3__optimize_outbox_claim.sql"));
     String[] schemaNames = {
       "users",
       "menus",
@@ -116,6 +118,8 @@ class BuildConfigurationTest {
       assertTrue(initialMigration.contains(schemaName));
     }
     assertTrue(lifecycleMigration.contains("CHARACTER SET ascii COLLATE ascii_bin"));
+    assertTrue(outboxClaimMigration.contains("idx_outbox_claim_order"));
+    assertTrue(outboxClaimMigration.contains("next_retry_at, created_at, event_id"));
   }
 
   private Set<String> declaredDependencies(String build) {

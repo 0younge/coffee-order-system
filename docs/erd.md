@@ -247,10 +247,11 @@ UNIQUE와 CHECK는 애플리케이션 검증의 대체물이 아니라 마지막
 | `outbox_events` | `(event_id)` | 예 | claim 결과 fencing 갱신 | PK 단건 갱신 |
 | `outbox_events` | `(order_id)` | 예 | 주문당 이벤트 중복 방지 | 중복 삽입 실패 |
 | `outbox_events` | `(status, next_retry_at)` | 아니요 | 즉시·예약 전송 후보 | backlog, 후보 스캔 수 |
+| `outbox_events` | `(next_retry_at, created_at, event_id, status, locked_at)` | 아니요 | 정렬된 배치 `SKIP LOCKED` 선점 | 배치당 잠금 조회 1회, 정렬·잠금 범위, 다중 워커 분할 |
 
 FK용 인덱스와 업무 인덱스의 중복은 실제 DDL에서 확인한다. 운영과 유사한 데이터 분포에서 `EXPLAIN ANALYZE`로 선택 인덱스, 실제 행 수, 임시 테이블과 정렬 여부를 기록한다.
 
-`outbox_events(status, locked_at)`은 lease 만료 조회 성능을 측정한 뒤 검토할 인덱스 후보다. 정확성 계약이 아니라 실행 계획에 따른 물리 튜닝 항목이다.
+`outbox_events(status, locked_at)`은 lease 만료 backlog가 커질 때 추가 측정할 인덱스 후보다. 현재 선점 쿼리는 `idx_outbox_claim_order`로 정렬과 `LIMIT`을 먼저 적용하고, 운영과 유사한 상태 분포에서 lease 후보 필터 비용을 계속 측정한다.
 
 ## 7. 상태 전이
 

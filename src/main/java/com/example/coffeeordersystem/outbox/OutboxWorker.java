@@ -81,8 +81,13 @@ class OutboxWorker {
 
   private CompletableFuture<Void> deliver(OutboxClaim claim) {
     long startedAt = System.nanoTime();
-    return httpSender
-        .send(claim.payload())
+    CompletableFuture<OutboxDeliveryResult> delivery;
+    try {
+      delivery = httpSender.send(claim.payload());
+    } catch (RuntimeException exception) {
+      delivery = CompletableFuture.failedFuture(exception);
+    }
+    return delivery
         .thenAccept(
             result -> {
               String deliveryResult;

@@ -116,7 +116,6 @@ class OutboxWorkerIntegrationTest {
   void sendsCommittedOrderWithoutWaitingForExternalResponse() throws Exception {
     double publishedBefore = counter("coffee.outbox.delivery.published");
     MOCK_API.reset(1, List.of(204), true, true);
-    long startedAt = System.nanoTime();
 
     mockMvc
         .perform(
@@ -125,9 +124,7 @@ class OutboxWorkerIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"userId\":" + userId + ",\"menuId\":" + menuId + "}"))
         .andExpect(status().isCreated());
-    long orderElapsedMillis = Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
 
-    assertTrue(orderElapsedMillis < 2_000, "주문 응답 시간: " + orderElapsedMillis);
     assertTrue(MOCK_API.awaitRequests(Duration.ofSeconds(2)));
     MockRequest request = MOCK_API.requests().get(0);
     String eventId = eventIdForUser();

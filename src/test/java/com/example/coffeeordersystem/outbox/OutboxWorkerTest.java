@@ -1,8 +1,11 @@
 package com.example.coffeeordersystem.outbox;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -67,6 +70,29 @@ class OutboxWorkerTest {
     assertTrue(failureLog.contains("latencyMs="));
     assertTrue(failureLog.contains("result=\"state_update_failed\""));
     assertFalse(output.getAll().contains("SQL error"));
+    assertFalse(output.getAll().contains("top-secret"));
+  }
+
+  @Test
+  @DisplayName("UT-OUTBOX-004 전송 시작 예외 뒤 active 상태를 해제해 다음 poll을 허용한다")
+  void releasesActiveStateAfterSynchronousSendFailure(CapturedOutput output) {
+    OutboxClaim failedClaim = new OutboxClaim("event-1", "claim-1", "{}", 0);
+    OutboxClaim nextClaim = new OutboxClaim("event-2", "claim-2", "{}", 0);
+    when(outboxStore.claim(CLOCK.instant(), 1))
+        .thenReturn(List.of(failedClaim))
+        .thenReturn(List.of(nextClaim));
+    when(httpSender.send("{}"))
+        .thenThrow(new IllegalStateException("HTTP_CLIENT_SECRET=top-secret"))
+        .thenReturn(CompletableFuture.completedFuture(OutboxDeliveryResult.success()));
+    when(outboxStore.publish("event-2", "claim-2", CLOCK.instant())).thenReturn(true);
+
+    assertDoesNotThrow(worker::poll);
+    assertDoesNotThrow(worker::poll);
+
+    verify(outboxStore, times(2)).claim(CLOCK.instant(), 1);
+    verify(outboxStore).publish("event-2", "claim-2", CLOCK.instant());
+    assertTrue(output.getAll().contains("errorType=\"IllegalStateException\""));
+    assertFalse(output.getAll().contains("HTTP_CLIENT_SECRET"));
     assertFalse(output.getAll().contains("top-secret"));
   }
 }

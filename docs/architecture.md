@@ -244,14 +244,14 @@ sequenceDiagram
 각 워커는 전송 가능한 이벤트를 짧은 DB 트랜잭션에서 다음과 같이 점유한다.
 
 1. 즉시 또는 재시도 시각이 지난 `PENDING` 이벤트와 30초 lease가 만료된 `PROCESSING` 이벤트를 후보로 조회한다.
-2. 후보 행은 `FOR UPDATE SKIP LOCKED`로 잠가 다른 워커가 기다리지 않고 다음 행을 찾게 한다.
-3. 선택한 행을 `PROCESSING`으로 바꾸고 새 `claim_token`과 `locked_at`을 기록한다.
+2. 선점 정렬용 인덱스를 따라 최대 배치를 한 번의 `FOR UPDATE SKIP LOCKED LIMIT` 조회로 잠가 다른 워커가 기다리지 않고 다음 행을 찾게 한다.
+3. 선택한 행을 한 번의 JDBC batch 갱신으로 `PROCESSING`으로 바꾸고 행마다 새 `claim_token`과 `locked_at`을 기록한다.
 4. 점유 트랜잭션을 커밋한 다음 DB 트랜잭션 밖에서 외부 HTTP를 호출한다.
 5. 결과 반영은 `event_id`, `PROCESSING`, `claim_token`이 모두 일치할 때만 수행한다.
 
 lease 만료 후 다른 워커가 새 토큰으로 재점유하면 이전 워커의 늦은 결과 갱신은 0건으로 끝난다. 이 fencing은 오래된 워커가 최신 상태를 덮어쓰는 것을 막지만, 이미 시작된 외부 HTTP 요청 자체를 취소하지는 못한다. 따라서 전달 보장은 정확히 한 번이 아니라 at-least-once다.
 
-`claim_token`은 UUID 문자열이다. 워커는 활성 배치가 없을 때 `next_retry_at`, `created_at`, `event_id` 오름차순으로 최대 50건을 선점하고 JDK `HttpClient.sendAsync`로 병렬 전송한다. 인스턴스마다 활성 배치는 하나만 허용하며 로컬 활성 배치 표시는 실행 과부하만 제어한다. 이벤트 소유권과 정합성은 계속 DB lease와 fencing이 담당한다. 폴링 주기는 `OUTBOX_POLL_INTERVAL_MS`로 기본 1초이며 승인된 2초 최초 요청 계약을 지키도록 `1~1000ms`만 허용한다. 배치 크기는 `OUTBOX_BATCH_SIZE`로 기본 50건이며 1 이상으로 설정한다.
+`claim_token`은 UUID 문자열이다. 워커는 활성 배치가 없을 때 `next_retry_at`, `created_at`, `event_id` 오름차순으로 최대 50건을 선점하고 JDK `HttpClient.sendAsync`로 병렬 전송한다. `sendAsync` 호출 자체가 동기 예외를 던져도 실패 future로 바꿔 배치 완료 경로에서 활성 표시를 해제한다. 인스턴스마다 활성 배치는 하나만 허용하며 로컬 활성 배치 표시는 실행 과부하만 제어한다. 이벤트 소유권과 정합성은 계속 DB lease와 fencing이 담당한다. 폴링 주기는 `OUTBOX_POLL_INTERVAL_MS`로 기본 1초이며 승인된 2초 최초 요청 계약을 지키도록 `1~1000ms`만 허용한다. 배치 크기는 `OUTBOX_BATCH_SIZE`로 기본 50건이며 1 이상으로 설정한다.
 
 주문 커밋과 동시에 이벤트를 전송 가능 상태로 두고, 워커 정상·전송 가능한 기존 backlog 없음 조건에서 2초 이내에 최초 외부 HTTP 요청을 시작한다. 이 기준은 외부 응답 완료나 `PUBLISHED` 전환 시간이 아니며 주문 API는 외부 응답을 기다리지 않는다.
 

@@ -1,5 +1,6 @@
 package com.example.coffeeordersystem.outbox;
 
+import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -33,91 +34,41 @@ class OutboxStore {
 
     Timestamp dueAt = Timestamp.from(now);
     Timestamp leaseCutoff = Timestamp.from(now.minus(LEASE));
+    List<LockedEvent> lockedEvents =
+        jdbcTemplate.query(
+            "SELECT event_id, payload, retry_count FROM outbox_events "
+                + "WHERE next_retry_at <= ? AND (status = 'PENDING' "
+                + "OR (status = 'PROCESSING' AND locked_at <= ?)) "
+                + "ORDER BY next_retry_at, created_at, event_id LIMIT ? FOR UPDATE SKIP LOCKED",
+            (resultSet, rowNumber) ->
+                new LockedEvent(
+                    resultSet.getString("event_id"),
+                    resultSet.getString("payload"),
+                    resultSet.getInt("retry_count")),
+            dueAt,
+            leaseCutoff,
+            limit);
     List<OutboxClaim> claims = new ArrayList<>();
-    Candidate cursor = null;
-    while (claims.size() < limit) {
-      List<Candidate> candidates =
-          findCandidates(dueAt, leaseCutoff, cursor, limit - claims.size());
-      if (candidates.isEmpty()) {
-        break;
-      }
-      for (Candidate candidate : candidates) {
-        lockAndClaim(candidate.eventId(), dueAt, leaseCutoff, now).ifPresent(claims::add);
-      }
-      cursor = candidates.get(candidates.size() - 1);
+    List<Object[]> batchArguments = new ArrayList<>();
+    for (LockedEvent event : lockedEvents) {
+      String claimToken = UUID.randomUUID().toString();
+      claims.add(new OutboxClaim(event.eventId(), claimToken, event.payload(), event.retryCount()));
+      batchArguments.add(new Object[] {Timestamp.from(now), claimToken, event.eventId()});
     }
-    return List.copyOf(claims);
-  }
-
-  private List<Candidate> findCandidates(
-      Timestamp dueAt, Timestamp leaseCutoff, Candidate cursor, int limit) {
-    String baseSql =
-        "SELECT event_id, next_retry_at, created_at FROM outbox_events "
-            + "WHERE ((status = 'PENDING' AND next_retry_at <= ?) "
-            + "OR (status = 'PROCESSING' AND locked_at <= ?)) ";
-    if (cursor == null) {
-      return jdbcTemplate.query(
-          baseSql + "ORDER BY next_retry_at, created_at, event_id LIMIT ?",
-          (resultSet, rowNumber) ->
-              new Candidate(
-                  resultSet.getString("event_id"),
-                  resultSet.getTimestamp("next_retry_at"),
-                  resultSet.getTimestamp("created_at")),
-          dueAt,
-          leaseCutoff,
-          limit);
+    if (batchArguments.isEmpty()) {
+      return List.of();
     }
-    return jdbcTemplate.query(
-        baseSql
-            + "AND (next_retry_at, created_at, event_id) > (?, ?, ?) "
-            + "ORDER BY next_retry_at, created_at, event_id LIMIT ?",
-        (resultSet, rowNumber) ->
-            new Candidate(
-                resultSet.getString("event_id"),
-                resultSet.getTimestamp("next_retry_at"),
-                resultSet.getTimestamp("created_at")),
-        dueAt,
-        leaseCutoff,
-        cursor.nextRetryAt(),
-        cursor.createdAt(),
-        cursor.eventId(),
-        limit);
-  }
-
-  private Optional<OutboxClaim> lockAndClaim(
-      String eventId, Timestamp dueAt, Timestamp leaseCutoff, Instant now) {
-    Optional<LockedEvent> lockedEvent =
-        jdbcTemplate
-            .query(
-                "SELECT payload, retry_count FROM outbox_events WHERE event_id = ? "
-                    + "AND ((status = 'PENDING' AND next_retry_at <= ?) "
-                    + "OR (status = 'PROCESSING' AND locked_at <= ?)) "
-                    + "FOR UPDATE SKIP LOCKED",
-                (resultSet, rowNumber) ->
-                    new LockedEvent(
-                        resultSet.getString("payload"), resultSet.getInt("retry_count")),
-                eventId,
-                dueAt,
-                leaseCutoff)
-            .stream()
-            .findFirst();
-    if (lockedEvent.isEmpty()) {
-      return Optional.empty();
-    }
-
-    String claimToken = UUID.randomUUID().toString();
-    int updated =
-        jdbcTemplate.update(
+    int[] updated =
+        jdbcTemplate.batchUpdate(
             "UPDATE outbox_events SET status = 'PROCESSING', locked_at = ?, "
                 + "claim_token = ? WHERE event_id = ?",
-            Timestamp.from(now),
-            claimToken,
-            eventId);
-    if (updated != 1) {
-      throw new IllegalStateException("Outbox 이벤트를 선점할 수 없습니다.");
+            batchArguments);
+    for (int updateCount : updated) {
+      if (updateCount != 1 && updateCount != Statement.SUCCESS_NO_INFO) {
+        throw new IllegalStateException("Outbox 이벤트를 선점할 수 없습니다.");
+      }
     }
-    LockedEvent event = lockedEvent.orElseThrow();
-    return Optional.of(new OutboxClaim(eventId, claimToken, event.payload(), event.retryCount()));
+    return List.copyOf(claims);
   }
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -204,7 +155,5 @@ class OutboxStore {
     return updated == 1;
   }
 
-  private record Candidate(String eventId, Timestamp nextRetryAt, Timestamp createdAt) {}
-
-  private record LockedEvent(String payload, int retryCount) {}
+  private record LockedEvent(String eventId, String payload, int retryCount) {}
 }

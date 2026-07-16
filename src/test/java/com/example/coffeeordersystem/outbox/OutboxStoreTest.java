@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -18,6 +21,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,7 +29,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -250,6 +256,32 @@ class OutboxStoreTest {
     }
   }
 
+  @Test
+  @DisplayName("IT-OUTBOX-004 50건을 잠금 조회 1회와 batch 갱신 1회로 선점한다")
+  void claimsFiftyRowsInTwoDatabaseStatements() {
+    List<String> expected = new ArrayList<>();
+    for (int index = 0; index < 50; index++) {
+      expected.add(
+          insertPendingEvent(0, NOW.minusSeconds(1), NOW.minusSeconds(100 - index), null, null));
+    }
+    AtomicLong preparedStatements = new AtomicLong();
+    DataSource measuredDataSource = measuredDataSource(preparedStatements);
+    JdbcTemplate measuredJdbcTemplate = new JdbcTemplate(measuredDataSource);
+    OutboxStore measuredStore = new OutboxStore(measuredJdbcTemplate);
+    TransactionTemplate transactionTemplate =
+        new TransactionTemplate(new DataSourceTransactionManager(measuredDataSource));
+
+    List<OutboxClaim> claims = transactionTemplate.execute(status -> measuredStore.claim(NOW, 50));
+
+    assertEquals(expected, eventIds(claims));
+    assertEquals(2L, preparedStatements.get());
+    assertEquals(
+        50L,
+        count(
+            "SELECT COUNT(*) FROM outbox_events WHERE status = 'PROCESSING' AND order_id IN "
+                + orderIds()));
+  }
+
   private String insertPendingEvent(
       int retryCount,
       Instant nextRetryAt,
@@ -338,5 +370,46 @@ class OutboxStoreTest {
   private long count(String sql) {
     Long value = jdbcTemplate.queryForObject(sql, Long.class);
     return value == null ? 0 : value;
+  }
+
+  private DataSource measuredDataSource(AtomicLong preparedStatements) {
+    DataSource delegate = jdbcTemplate.getDataSource();
+    if (delegate == null) {
+      throw new IllegalStateException("테스트 DataSource가 필요합니다.");
+    }
+    return (DataSource)
+        Proxy.newProxyInstance(
+            DataSource.class.getClassLoader(),
+            new Class<?>[] {DataSource.class},
+            (proxy, method, arguments) -> {
+              Object result = invoke(method, delegate, arguments);
+              if (method.getName().equals("getConnection")
+                  && result instanceof java.sql.Connection connection) {
+                return measuredConnection(connection, preparedStatements);
+              }
+              return result;
+            });
+  }
+
+  private java.sql.Connection measuredConnection(
+      java.sql.Connection delegate, AtomicLong preparedStatements) {
+    return (java.sql.Connection)
+        Proxy.newProxyInstance(
+            java.sql.Connection.class.getClassLoader(),
+            new Class<?>[] {java.sql.Connection.class},
+            (proxy, method, arguments) -> {
+              if (method.getName().equals("prepareStatement")) {
+                preparedStatements.incrementAndGet();
+              }
+              return invoke(method, delegate, arguments);
+            });
+  }
+
+  private Object invoke(Method method, Object target, Object[] arguments) throws Throwable {
+    try {
+      return method.invoke(target, arguments);
+    } catch (InvocationTargetException exception) {
+      throw exception.getTargetException();
+    }
   }
 }

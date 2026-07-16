@@ -604,7 +604,7 @@ class DatabaseMigrationTest {
                 + "column_name, '|', non_unique) FROM information_schema.statistics "
                 + "WHERE table_schema = DATABASE() AND index_name IN "
                 + "('idx_orders_popular', 'uk_idempotency_request', "
-                + "'uk_outbox_order', 'idx_outbox_due') "
+                + "'uk_outbox_order', 'idx_outbox_due', 'idx_outbox_claim_order') "
                 + "ORDER BY table_name, index_name, seq_in_index",
             String.class);
     List<String> foreignKeys =
@@ -638,6 +638,11 @@ class DatabaseMigrationTest {
             "orders|idx_orders_popular|1|status|1",
             "orders|idx_orders_popular|2|paid_at|1",
             "orders|idx_orders_popular|3|menu_id|1",
+            "outbox_events|idx_outbox_claim_order|1|next_retry_at|1",
+            "outbox_events|idx_outbox_claim_order|2|created_at|1",
+            "outbox_events|idx_outbox_claim_order|3|event_id|1",
+            "outbox_events|idx_outbox_claim_order|4|status|1",
+            "outbox_events|idx_outbox_claim_order|5|locked_at|1",
             "outbox_events|idx_outbox_due|1|status|1",
             "outbox_events|idx_outbox_due|2|next_retry_at|1",
             "outbox_events|uk_outbox_order|1|order_id|0"),
