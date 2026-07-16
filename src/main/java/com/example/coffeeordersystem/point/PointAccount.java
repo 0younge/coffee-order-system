@@ -5,7 +5,10 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "users")
 class PointAccount {
@@ -17,8 +20,6 @@ class PointAccount {
 
   @Column(name = "updated_at", nullable = false)
   private Instant updatedAt;
-
-  protected PointAccount() {}
 
   PointAccount(long id, long pointBalance, Instant updatedAt) {
     this.id = id;

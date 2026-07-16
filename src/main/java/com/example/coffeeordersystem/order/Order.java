@@ -7,7 +7,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "orders")
 class Order {
@@ -36,8 +39,6 @@ class Order {
 
   @Column(name = "created_at", nullable = false)
   private Instant createdAt;
-
-  protected Order() {}
 
   private Order(
       long userId, long menuId, String menuNameSnapshot, long paidAmount, Instant paidAt) {
