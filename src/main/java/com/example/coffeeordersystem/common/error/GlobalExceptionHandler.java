@@ -3,8 +3,8 @@ package com.example.coffeeordersystem.common.error;
 import com.example.coffeeordersystem.common.api.ApiResponse;
 import com.example.coffeeordersystem.common.observability.DatabaseContentionMetrics;
 import com.example.coffeeordersystem.common.observability.RequestCorrelation;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.http.ResponseEntity;
@@ -21,16 +21,12 @@ import tools.jackson.core.JsonToken;
 import tools.jackson.databind.exc.MismatchedInputException;
 import tools.jackson.databind.exc.UnrecognizedPropertyException;
 
+@Slf4j
+@RequiredArgsConstructor
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-  private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
-
   private final DatabaseContentionMetrics contentionMetrics;
-
-  public GlobalExceptionHandler(DatabaseContentionMetrics contentionMetrics) {
-    this.contentionMetrics = contentionMetrics;
-  }
 
   @ExceptionHandler(ApiException.class)
   public ResponseEntity<ApiResponse<Void>> handleApiException(ApiException exception) {

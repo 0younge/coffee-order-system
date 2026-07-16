@@ -10,12 +10,14 @@ import com.example.coffeeordersystem.idempotency.IdempotencyService;
 import com.example.coffeeordersystem.idempotency.RequestHasher;
 import java.time.Clock;
 import java.time.Instant;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+@RequiredArgsConstructor
 @Service
 class PointService {
 
@@ -25,21 +27,6 @@ class PointService {
   private final ObjectMapper objectMapper;
   private final Clock clock;
   private final BusinessEventLogger businessEventLogger;
-
-  PointService(
-      PointAccountRepository pointAccountRepository,
-      IdempotencyService idempotencyService,
-      RequestHasher requestHasher,
-      ObjectMapper objectMapper,
-      Clock clock,
-      BusinessEventLogger businessEventLogger) {
-    this.pointAccountRepository = pointAccountRepository;
-    this.idempotencyService = idempotencyService;
-    this.requestHasher = requestHasher;
-    this.objectMapper = objectMapper;
-    this.clock = clock;
-    this.businessEventLogger = businessEventLogger;
-  }
 
   @Transactional
   PointChargeResult charge(ChargeCommand command) {

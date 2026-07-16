@@ -3,17 +3,15 @@ package com.example.coffeeordersystem.idempotency;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+@RequiredArgsConstructor
 @Repository
 class IdempotencyRepository {
 
   private final JdbcTemplate jdbcTemplate;
-
-  IdempotencyRepository(JdbcTemplate jdbcTemplate) {
-    this.jdbcTemplate = jdbcTemplate;
-  }
 
   void upsert(
       long userId,

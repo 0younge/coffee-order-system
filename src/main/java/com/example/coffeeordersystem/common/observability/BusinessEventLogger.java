@@ -1,15 +1,13 @@
 package com.example.coffeeordersystem.common.observability;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+@Slf4j
 @Component
 public class BusinessEventLogger {
-
-  private static final Logger log = LoggerFactory.getLogger(BusinessEventLogger.class);
 
   public void pointResult(long userId, String resultCode) {
     String requestId = RequestCorrelation.requestId();

@@ -2,22 +2,19 @@ package com.example.coffeeordersystem.menu;
 
 import com.example.coffeeordersystem.common.api.ApiResponse;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@RequiredArgsConstructor
 @RestController
 @RequestMapping("/api/v1/menus")
 class MenuController {
 
   private final MenuService menuService;
   private final PopularMenuService popularMenuService;
-
-  MenuController(MenuService menuService, PopularMenuService popularMenuService) {
-    this.menuService = menuService;
-    this.popularMenuService = popularMenuService;
-  }
 
   @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   ApiResponse<List<MenuResponse>> findAll() {

@@ -4,12 +4,12 @@ import java.time.Clock;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+@Slf4j
 @Component
 @ConditionalOnProperty(
     prefix = "outbox.worker",
@@ -17,8 +17,6 @@ import org.springframework.stereotype.Component;
     havingValue = "true",
     matchIfMissing = true)
 class OutboxWorker {
-
-  private static final Logger log = LoggerFactory.getLogger(OutboxWorker.class);
 
   private final OutboxStore outboxStore;
   private final OutboxHttpSender httpSender;

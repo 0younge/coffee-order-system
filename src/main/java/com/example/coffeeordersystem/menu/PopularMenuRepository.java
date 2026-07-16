@@ -3,17 +3,15 @@ package com.example.coffeeordersystem.menu;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+@RequiredArgsConstructor
 @Repository
 class PopularMenuRepository {
 
   private final JdbcTemplate jdbcTemplate;
-
-  PopularMenuRepository(JdbcTemplate jdbcTemplate) {
-    this.jdbcTemplate = jdbcTemplate;
-  }
 
   List<PopularMenuAggregate> findTopThree(Instant from, Instant to) {
     return jdbcTemplate.query(

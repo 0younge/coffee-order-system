@@ -2,17 +2,16 @@ package com.example.coffeeordersystem.menu;
 
 import java.util.List;
 import java.util.Optional;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 @Service
 public class MenuService {
 
   private final MenuRepository menuRepository;
-
-  MenuService(MenuRepository menuRepository) {
-    this.menuRepository = menuRepository;
-  }
 
   @Transactional(readOnly = true)
   List<MenuResponse> findAll() {

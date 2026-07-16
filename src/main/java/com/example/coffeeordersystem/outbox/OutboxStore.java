@@ -8,12 +8,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+@RequiredArgsConstructor
 @Repository
 class OutboxStore {
 
@@ -21,10 +23,6 @@ class OutboxStore {
 
   private final JdbcTemplate jdbcTemplate;
   private final OutboxRetryPolicy retryPolicy = new OutboxRetryPolicy();
-
-  OutboxStore(JdbcTemplate jdbcTemplate) {
-    this.jdbcTemplate = jdbcTemplate;
-  }
 
   @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
   public List<OutboxClaim> claim(Instant now, int limit) {

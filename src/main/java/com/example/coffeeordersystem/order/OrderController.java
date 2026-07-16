@@ -1,6 +1,7 @@
 package com.example.coffeeordersystem.order;
 
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -10,15 +11,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 
+@RequiredArgsConstructor
 @RestController
 @RequestMapping("/api/v1/orders")
 class OrderController {
 
   private final OrderService orderService;
-
-  OrderController(OrderService orderService) {
-    this.orderService = orderService;
-  }
 
   @PostMapping(
       consumes = MediaType.APPLICATION_JSON_VALUE,

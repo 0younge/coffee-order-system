@@ -1,20 +1,18 @@
 package com.example.coffeeordersystem.idempotency;
 
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 @Service
 public class IdempotencyService {
 
   private final IdempotencyRepository idempotencyRepository;
   private final ObjectMapper objectMapper;
-
-  IdempotencyService(IdempotencyRepository idempotencyRepository, ObjectMapper objectMapper) {
-    this.idempotencyRepository = idempotencyRepository;
-    this.objectMapper = objectMapper;
-  }
 
   public IdempotencyClaim claim(
       long userId,

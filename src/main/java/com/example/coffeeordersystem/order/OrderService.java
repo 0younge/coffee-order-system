@@ -15,12 +15,14 @@ import com.example.coffeeordersystem.point.PointPaymentService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+@RequiredArgsConstructor
 @Service
 class OrderService {
 
@@ -33,27 +35,6 @@ class OrderService {
   private final ObjectMapper objectMapper;
   private final Clock clock;
   private final BusinessEventLogger businessEventLogger;
-
-  OrderService(
-      PointPaymentService pointPaymentService,
-      IdempotencyService idempotencyService,
-      RequestHasher requestHasher,
-      MenuService menuService,
-      OrderRepository orderRepository,
-      OutboxEventWriter outboxEventWriter,
-      ObjectMapper objectMapper,
-      Clock clock,
-      BusinessEventLogger businessEventLogger) {
-    this.pointPaymentService = pointPaymentService;
-    this.idempotencyService = idempotencyService;
-    this.requestHasher = requestHasher;
-    this.menuService = menuService;
-    this.orderRepository = orderRepository;
-    this.outboxEventWriter = outboxEventWriter;
-    this.objectMapper = objectMapper;
-    this.clock = clock;
-    this.businessEventLogger = businessEventLogger;
-  }
 
   @Transactional
   OrderResult place(OrderCommand command) {
