@@ -2,6 +2,7 @@ package com.example.coffeeordersystem.menu.domain;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Objects;
 
 public final class PopularMenuWindow {
 
@@ -29,5 +30,26 @@ public final class PopularMenuWindow {
 
   public Instant to() {
     return to;
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (this == other) {
+      return true;
+    }
+    if (!(other instanceof PopularMenuWindow window)) {
+      return false;
+    }
+    return from.equals(window.from) && to.equals(window.to);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(from, to);
+  }
+
+  @Override
+  public String toString() {
+    return "PopularMenuWindow[from=" + from + ", to=" + to + "]";
   }
 }

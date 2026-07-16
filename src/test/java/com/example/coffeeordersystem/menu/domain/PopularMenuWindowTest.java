@@ -29,4 +29,18 @@ class PopularMenuWindowTest {
     assertEquals(Instant.parse("2026-07-09T12:00:00.123457Z"), window.from());
     assertEquals(Instant.parse("2026-07-16T12:00:00.123457Z"), window.to());
   }
+
+  @Test
+  @DisplayName("UT-POPULAR-001 같은 종료 시각의 기간은 같은 값 객체다")
+  void comparesWindowsByValue() {
+    Instant to = Instant.parse("2026-07-16T12:00:00Z");
+
+    PopularMenuWindow first = PopularMenuWindow.endingAt(to);
+    PopularMenuWindow second = PopularMenuWindow.endingAt(to);
+
+    assertEquals(first, second);
+    assertEquals(first.hashCode(), second.hashCode());
+    assertEquals(
+        "PopularMenuWindow[from=2026-07-09T12:00:00Z, to=2026-07-16T12:00:00Z]", first.toString());
+  }
 }
