@@ -207,6 +207,7 @@ Mock 서버는 테스트마다 수신 기록과 응답 스크립트를 초기화
 | `QT-CONFIG-003` | 테스트 DB·워커 프로필 | 멱등 초기화 스크립트로 신규·기존 볼륨의 테스트 DB를 안전하게 준비하고, 일반 테스트는 테스트 DB만 사용하며 Outbox 전용 테스트만 Mock 서버와 함께 워커를 켬 |
 | `QT-CONFIG-004` | Outbox 폴링 간격 | 승인된 최초 요청 계약을 지키도록 `OUTBOX_POLL_INTERVAL_MS`를 `1~1000ms`로 제한하고 범위 밖이면 시작 실패 |
 | `QT-CONFIG-005` | fresh MySQL CI | GitHub Actions가 작업별 MySQL 8.4와 테스트 전용 공개 자격 증명만 사용해 `clean check build`를 실행하고 저장소·운영 시크릿을 참조하지 않음 |
+| `QT-HARNESS-001` | 하네스·트랜잭션 안내 | `AGENTS.md` 100줄 제한과 `CLAUDE.md` 포인터를 지키고 현재 구현 상태·사용자 락 선행 순서·ADR-0025 결정 링크가 일치 |
 | `QT-OBS-001` | key-value 로그와 비밀정보 제거 | 요청·사용자·주문·이벤트 상관 ID를 연결하고 DB 자격 증명·전체 멱등키를 기록하지 않으며 외부 JSON 로그 라이브러리를 사용하지 않음 |
 | `QT-OBS-002` | 관측 지표 | `http.server.requests`, HikariCP 기본 지표, DB 경합과 Outbox counter, `PENDING`·`FAILED`·oldest pending gauge가 등록·증가하고 고 cardinality 식별자 tag가 없음 |
 | `QT-TRACE-001` | 문서 링크와 추적성 | README 링크가 유효하고 요구사항·ADR·테스트 ID에 끊긴 참조가 없음 |
