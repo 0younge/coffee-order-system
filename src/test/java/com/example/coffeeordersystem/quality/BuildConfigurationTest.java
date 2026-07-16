@@ -1,11 +1,13 @@
 package com.example.coffeeordersystem.quality;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -41,13 +43,20 @@ class BuildConfigurationTest {
   void usesOnlyApprovedApplicationDependencies() throws IOException {
     String build = Files.readString(Path.of("build.gradle"));
 
-    assertTrue(build.contains("spring-boot-starter-validation"));
-    assertTrue(build.contains("spring-boot-starter-actuator"));
-    assertTrue(build.contains("spring-boot-flyway"));
-    assertTrue(build.contains("org.flywaydb:flyway-core"));
-    assertTrue(build.contains("org.flywaydb:flyway-mysql"));
-    assertFalse(build.contains("spring-boot-starter-security"));
-    assertFalse(build.contains("lombok"));
+    assertEquals(
+        Set.of(
+            "implementation|org.springframework.boot:spring-boot-starter-actuator",
+            "implementation|org.springframework.boot:spring-boot-starter-data-jpa",
+            "implementation|org.springframework.boot:spring-boot-starter-validation",
+            "implementation|org.springframework.boot:spring-boot-starter-webmvc",
+            "implementation|org.springframework.boot:spring-boot-flyway",
+            "implementation|org.flywaydb:flyway-core",
+            "implementation|org.flywaydb:flyway-mysql",
+            "runtimeOnly|com.mysql:mysql-connector-j",
+            "testImplementation|org.springframework.boot:spring-boot-starter-data-jpa-test",
+            "testImplementation|org.springframework.boot:spring-boot-starter-webmvc-test",
+            "testRuntimeOnly|org.junit.platform:junit-platform-launcher"),
+        declaredDependencies(build));
   }
 
   @Test
@@ -107,5 +116,32 @@ class BuildConfigurationTest {
       assertTrue(initialMigration.contains(schemaName));
     }
     assertTrue(lifecycleMigration.contains("CHARACTER SET ascii COLLATE ascii_bin"));
+  }
+
+  private Set<String> declaredDependencies(String build) {
+    boolean[] inDependencies = {false};
+    return Set.copyOf(
+        build
+            .lines()
+            .map(String::trim)
+            .takeWhile(line -> !inDependencies[0] || !line.equals("}"))
+            .filter(
+                line -> {
+                  if (line.equals("dependencies {")) {
+                    inDependencies[0] = true;
+                    return false;
+                  }
+                  return inDependencies[0] && !line.isBlank();
+                })
+            .map(
+                line -> {
+                  int separator = line.indexOf(' ');
+                  int firstQuote = line.indexOf('\'');
+                  int lastQuote = line.lastIndexOf('\'');
+                  return line.substring(0, separator)
+                      + "|"
+                      + line.substring(firstQuote + 1, lastQuote);
+                })
+            .toList());
   }
 }

@@ -309,6 +309,240 @@ class DatabaseMigrationTest {
   }
 
   @Test
+  @Transactional
+  @DisplayName("IT-DB-002 주문 결제 금액은 양수만 허용한다")
+  void rejectsNonPositiveOrderAmount() {
+    long id = Math.floorMod(System.nanoTime(), 1_000_000_000L) + 5_000_000_000L;
+    Timestamp now = Timestamp.from(Instant.parse("2026-07-16T00:00:00Z"));
+    insertUserMenuAndOrder(id, now);
+
+    assertCheckViolation(
+        () ->
+            jdbcTemplate.update(
+                "INSERT INTO orders "
+                    + "(id, user_id, menu_id, menu_name_snapshot, paid_amount, status, "
+                    + "paid_at, created_at) VALUES (?, ?, ?, 'test', 0, 'PAID', ?, ?)",
+                id + 1,
+                id,
+                id,
+                now,
+                now));
+  }
+
+  @Test
+  @Transactional
+  @DisplayName("IT-DB-002 멱등 상태별 결과 필드 조합을 정확히 강제한다")
+  void enforcesIdempotencyStateFieldMatrix() {
+    long id = Math.floorMod(System.nanoTime(), 1_000_000_000L) + 6_000_000_000L;
+    Timestamp now = Timestamp.from(Instant.parse("2026-07-16T00:00:00Z"));
+    insertUserMenuAndOrder(id, now);
+
+    insertIdempotency(id, 1, "PROCESSING", null, null, false, null, now);
+    insertIdempotency(id, 2, "COMPLETED", "OK", 200, true, now, now);
+
+    assertCheckViolation(
+        () -> insertIdempotency(id, 3, "PROCESSING", "OK", null, false, null, now));
+    assertCheckViolation(() -> insertIdempotency(id, 4, "PROCESSING", null, 200, false, null, now));
+    assertCheckViolation(() -> insertIdempotency(id, 5, "PROCESSING", null, null, true, null, now));
+    assertCheckViolation(() -> insertIdempotency(id, 6, "PROCESSING", null, null, false, now, now));
+    assertCheckViolation(() -> insertIdempotency(id, 7, "COMPLETED", null, 200, true, now, now));
+    assertCheckViolation(() -> insertIdempotency(id, 8, "COMPLETED", "OK", null, true, now, now));
+    assertCheckViolation(() -> insertIdempotency(id, 9, "COMPLETED", "OK", 200, false, now, now));
+    assertCheckViolation(() -> insertIdempotency(id, 10, "COMPLETED", "OK", 200, true, null, now));
+  }
+
+  @Test
+  @Transactional
+  @DisplayName("IT-DB-002 Outbox 상태별 필드와 재시도 범위를 정확히 강제한다")
+  void enforcesOutboxStateFieldMatrix() {
+    long id = Math.floorMod(System.nanoTime(), 1_000_000_000L) + 7_000_000_000L;
+    Timestamp now = Timestamp.from(Instant.parse("2026-07-16T00:00:00Z"));
+    String claimToken = "70000000-0000-0000-0000-000000000000";
+    insertUserMenuAndOrder(id, now);
+    for (int sequence = 1; sequence <= 5; sequence++) {
+      insertOrder(id + sequence, id, id, now);
+    }
+    insertOrder(id + 10, id, id, now);
+
+    insertOutbox(1, id, "PENDING", 0, now, null, null, null, null, null, null, now);
+    insertOutbox(2, id + 1, "PENDING", 1, now, null, null, null, null, null, "NETWORK", now);
+    insertOutbox(3, id + 2, "PROCESSING", 0, now, now, claimToken, null, null, null, null, now);
+    insertOutbox(
+        4, id + 3, "PROCESSING", 3, now, now, claimToken, null, null, 503, "HTTP_5XX", now);
+    insertOutbox(5, id + 4, "PUBLISHED", 3, null, null, null, now, null, null, null, now);
+    insertOutbox(6, id + 5, "FAILED", 4, null, null, null, null, now, null, "TIMEOUT", now);
+
+    long invalidOrderId = id + 10;
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                101, invalidOrderId, "PENDING", 0, null, null, null, null, null, null, null, now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                102, invalidOrderId, "PENDING", 1, now, null, null, null, null, null, null, now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                103, invalidOrderId, "PENDING", 0, now, now, null, null, null, null, null, now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                104, invalidOrderId, "PENDING", 0, now, null, null, now, null, null, null, now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                105,
+                invalidOrderId,
+                "PROCESSING",
+                0,
+                now,
+                null,
+                claimToken,
+                null,
+                null,
+                null,
+                null,
+                now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                106, invalidOrderId, "PROCESSING", 0, now, now, null, null, null, null, null, now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                107,
+                invalidOrderId,
+                "PROCESSING",
+                0,
+                now,
+                now,
+                claimToken,
+                null,
+                now,
+                null,
+                null,
+                now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                108, invalidOrderId, "PUBLISHED", 0, now, null, null, now, null, null, null, now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                109,
+                invalidOrderId,
+                "PUBLISHED",
+                0,
+                null,
+                null,
+                null,
+                now,
+                null,
+                503,
+                "HTTP_5XX",
+                now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                110,
+                invalidOrderId,
+                "FAILED",
+                1,
+                now,
+                null,
+                null,
+                null,
+                now,
+                null,
+                "NETWORK",
+                now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                111,
+                invalidOrderId,
+                "FAILED",
+                1,
+                null,
+                now,
+                claimToken,
+                null,
+                now,
+                null,
+                "NETWORK",
+                now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                112,
+                invalidOrderId,
+                "FAILED",
+                1,
+                null,
+                null,
+                null,
+                now,
+                now,
+                null,
+                "NETWORK",
+                now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                113, invalidOrderId, "PENDING", -1, now, null, null, null, null, null, null, now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                114,
+                invalidOrderId,
+                "FAILED",
+                5,
+                null,
+                null,
+                null,
+                null,
+                now,
+                null,
+                "TIMEOUT",
+                now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                115,
+                invalidOrderId,
+                "PENDING",
+                1,
+                now,
+                null,
+                null,
+                null,
+                null,
+                500,
+                "NETWORK",
+                now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                116,
+                invalidOrderId,
+                "PENDING",
+                1,
+                now,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "HTTP_5XX",
+                now));
+    assertCheckViolation(
+        () ->
+            insertOutbox(
+                117, invalidOrderId, "PENDING", 1, now, null, null, null, null, 500, null, now));
+  }
+
+  @Test
   @DisplayName("IT-DB-003 실제 컬럼과 핵심 인덱스가 ERD와 일치한다")
   void matchesDocumentedColumnsAndIndexes() {
     Set<String> expectedColumns =
@@ -513,6 +747,65 @@ class DatabaseMigrationTest {
     assertEquals(1452, sqlException.getErrorCode());
   }
 
+  private void insertIdempotency(
+      long userId,
+      int keySequence,
+      String status,
+      String resultCode,
+      Integer httpStatus,
+      boolean hasResponseBody,
+      Timestamp completedAt,
+      Timestamp now) {
+    jdbcTemplate.update(
+        "INSERT INTO idempotency_records "
+            + "(user_id, operation_type, idempotency_key, request_hash, result_code, "
+            + "http_status, response_body, status, completed_at, created_at, updated_at) "
+            + "VALUES (?, 'CHARGE', ?, REPEAT('a', 64), ?, ?, "
+            + "IF(?, JSON_OBJECT(), NULL), ?, ?, ?, ?)",
+        userId,
+        String.format("60000000-0000-0000-0000-%012d", keySequence),
+        resultCode,
+        httpStatus,
+        hasResponseBody,
+        status,
+        completedAt,
+        now,
+        now);
+  }
+
+  private void insertOutbox(
+      int eventSequence,
+      long orderId,
+      String status,
+      int retryCount,
+      Timestamp nextRetryAt,
+      Timestamp lockedAt,
+      String claimToken,
+      Timestamp publishedAt,
+      Timestamp failedAt,
+      Integer lastHttpStatus,
+      String lastErrorType,
+      Timestamp createdAt) {
+    jdbcTemplate.update(
+        "INSERT INTO outbox_events "
+            + "(event_id, order_id, event_type, payload, status, retry_count, next_retry_at, "
+            + "locked_at, claim_token, published_at, failed_at, last_http_status, "
+            + "last_error_type, created_at) "
+            + "VALUES (?, ?, 'ORDER_PAID', JSON_OBJECT(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        String.format("70000000-0000-0000-0000-%012d", eventSequence),
+        orderId,
+        status,
+        retryCount,
+        nextRetryAt,
+        lockedAt,
+        claimToken,
+        publishedAt,
+        failedAt,
+        lastHttpStatus,
+        lastErrorType,
+        createdAt);
+  }
+
   private void insertUserMenuAndOrder(long id, Timestamp now) {
     jdbcTemplate.update(
         "INSERT INTO users (id, point_balance, created_at, updated_at) VALUES (?, 10000, ?, ?)",
@@ -521,13 +814,17 @@ class DatabaseMigrationTest {
         now);
     jdbcTemplate.update(
         "INSERT INTO menus (id, name, price, created_at) VALUES (?, 'test', 4000, ?)", id, now);
+    insertOrder(id, id, id, now);
+  }
+
+  private void insertOrder(long orderId, long userId, long menuId, Timestamp now) {
     jdbcTemplate.update(
         "INSERT INTO orders "
             + "(id, user_id, menu_id, menu_name_snapshot, paid_amount, status, paid_at, created_at) "
             + "VALUES (?, ?, ?, 'test', 4000, 'PAID', ?, ?)",
-        id,
-        id,
-        id,
+        orderId,
+        userId,
+        menuId,
         now,
         now);
   }
