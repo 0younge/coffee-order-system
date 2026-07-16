@@ -1,0 +1,62 @@
+package com.example.coffeeordersystem.outbox;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+
+@ExtendWith(OutputCaptureExtension.class)
+class OutboxWorkerTest {
+
+  private static final Clock CLOCK =
+      Clock.fixed(Instant.parse("2026-07-16T00:00:00Z"), ZoneOffset.UTC);
+
+  private final OutboxStore outboxStore = mock(OutboxStore.class);
+  private final OutboxHttpSender httpSender = mock(OutboxHttpSender.class);
+  private final OutboxMetrics metrics = mock(OutboxMetrics.class);
+  private final OutboxWorker worker = new OutboxWorker(outboxStore, httpSender, CLOCK, metrics, 1);
+
+  @Test
+  @DisplayName("QT-OBS-001 Outbox 선점 예외의 메시지와 내부 정보를 로그에 노출하지 않는다")
+  void hidesClaimExceptionDetails(CapturedOutput output) {
+    when(outboxStore.claim(CLOCK.instant(), 1))
+        .thenThrow(new IllegalStateException("SQL error DB_PASSWORD=top-secret"));
+
+    worker.poll();
+
+    assertTrue(output.getAll().contains("errorType=\"IllegalStateException\""));
+    assertFalse(output.getAll().contains("SQL error"));
+    assertFalse(output.getAll().contains("top-secret"));
+  }
+
+  @Test
+  @DisplayName("QT-OBS-001 Outbox 결과 반영 예외의 메시지와 내부 정보를 로그에 노출하지 않는다")
+  void hidesResultUpdateExceptionDetails(CapturedOutput output) {
+    OutboxClaim claim = new OutboxClaim("event-1", "claim-1", "{}", 0);
+    when(outboxStore.claim(CLOCK.instant(), 1)).thenReturn(List.of(claim));
+    when(httpSender.send("{}"))
+        .thenReturn(CompletableFuture.completedFuture(OutboxDeliveryResult.success()));
+    when(outboxStore.publish("event-1", "claim-1", CLOCK.instant()))
+        .thenThrow(new IllegalStateException("SQL error DB_PASSWORD=top-secret"));
+
+    worker.poll();
+
+    assertTrue(output.getAll().contains("errorType=\"IllegalStateException\""));
+    assertTrue(output.getAll().contains("eventId=\"event-1\""));
+    assertTrue(output.getAll().contains("attempt=\"1\""));
+    assertTrue(output.getAll().contains("result=\"state_update_failed\""));
+    assertFalse(output.getAll().contains("SQL error"));
+    assertFalse(output.getAll().contains("top-secret"));
+  }
+}

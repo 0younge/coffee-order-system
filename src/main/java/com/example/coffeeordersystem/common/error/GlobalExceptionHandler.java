@@ -3,6 +3,7 @@ package com.example.coffeeordersystem.common.error;
 import com.example.coffeeordersystem.common.api.ApiResponse;
 import com.example.coffeeordersystem.common.observability.DatabaseContentionMetrics;
 import com.example.coffeeordersystem.common.observability.RequestCorrelation;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -68,8 +69,12 @@ public class GlobalExceptionHandler {
   }
 
   @ExceptionHandler(NoResourceFoundException.class)
-  public ResponseEntity<Void> handleNoResourceFound(NoResourceFoundException exception) {
-    return ResponseEntity.notFound().build();
+  public ResponseEntity<?> handleNoResourceFound(
+      NoResourceFoundException exception, HttpServletRequest request) {
+    if (request.getRequestURI().startsWith("/actuator/")) {
+      return ResponseEntity.notFound().build();
+    }
+    return handleUnexpectedException(exception);
   }
 
   @ExceptionHandler(Exception.class)

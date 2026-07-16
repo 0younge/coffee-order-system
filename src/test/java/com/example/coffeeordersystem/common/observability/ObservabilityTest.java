@@ -13,7 +13,6 @@ import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
@@ -107,13 +106,15 @@ class ObservabilityTest {
     exceptionHandler.handleUnexpectedException(
         new IllegalStateException("SQL error DB_PASSWORD=top-secret"));
     String logs = output.getAll();
+    String orderLog = lineContaining(logs, "주문 처리 완료");
+    String requestLog = lineContaining(logs, "HTTP 요청 완료");
+    Matcher requestIdMatcher = REQUEST_ID_PATTERN.matcher(orderLog);
 
-    assertTrue(logs.contains("주문 처리 완료"));
-    assertTrue(logs.contains("HTTP 요청 완료"));
-    assertTrue(containsKeyValue(logs, "userId", Long.toString(userId)));
-    assertTrue(containsKeyValue(logs, "orderId", Long.toString(orderId)));
-    assertTrue(containsKeyValue(logs, "eventId", eventId));
-    assertEquals(1, requestIds(logs).size());
+    assertTrue(requestIdMatcher.find());
+    assertTrue(containsKeyValue(orderLog, "userId", Long.toString(userId)));
+    assertTrue(containsKeyValue(orderLog, "orderId", Long.toString(orderId)));
+    assertTrue(containsKeyValue(orderLog, "eventId", eventId));
+    assertTrue(containsKeyValue(requestLog, "requestId", requestIdMatcher.group(1)));
     assertFalse(logs.contains(idempotencyKey));
     assertFalse(logs.contains("top-secret"));
     assertFalse(logs.contains("DB_PASSWORD"));
@@ -136,6 +137,11 @@ class ObservabilityTest {
         .andExpect(jsonPath("$.components").doesNotExist())
         .andExpect(jsonPath("$.details").doesNotExist());
     mockMvc.perform(get("/actuator/metrics")).andExpect(status().isNotFound());
+    mockMvc
+        .perform(get("/api/v1/not-defined"))
+        .andExpect(status().isInternalServerError())
+        .andExpect(jsonPath("$.success").value(false))
+        .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
 
     assertEquals("health", environment.getProperty("management.endpoints.web.exposure.include"));
     assertEquals("never", environment.getProperty("management.endpoint.health.show-details"));
@@ -220,12 +226,7 @@ class ObservabilityTest {
     return logs.contains(key + "=\"" + value + "\"") || logs.contains(key + "=" + value);
   }
 
-  private Set<String> requestIds(String logs) {
-    Set<String> requestIds = new HashSet<>();
-    Matcher matcher = REQUEST_ID_PATTERN.matcher(logs);
-    while (matcher.find()) {
-      requestIds.add(matcher.group(1));
-    }
-    return requestIds;
+  private String lineContaining(String logs, String text) {
+    return logs.lines().filter(line -> line.contains(text)).findFirst().orElseThrow();
   }
 }

@@ -57,7 +57,9 @@ class OutboxWorker {
       claims = outboxStore.claim(clock.instant(), batchSize);
     } catch (RuntimeException exception) {
       active.set(false);
-      log.warn("Outbox 이벤트 선점에 실패했습니다.", exception);
+      log.atWarn()
+          .addKeyValue("errorType", exception.getClass().getSimpleName())
+          .log("Outbox 이벤트 선점에 실패했습니다.");
       return;
     }
 
@@ -72,7 +74,10 @@ class OutboxWorker {
         .whenComplete(
             (ignored, throwable) -> {
               if (throwable != null) {
-                log.warn("Outbox 배치 결과 반영 중 오류가 발생했습니다.", throwable);
+                Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
+                log.atWarn()
+                    .addKeyValue("errorType", cause.getClass().getSimpleName())
+                    .log("Outbox 배치 결과 반영 중 오류가 발생했습니다.");
               }
               active.set(false);
             });
@@ -118,6 +123,18 @@ class OutboxWorker {
                   .addKeyValue("latencyMs", latencyMillis)
                   .addKeyValue("result", deliveryResult)
                   .log("Outbox 이벤트 전달 완료");
+            })
+        .whenComplete(
+            (ignored, throwable) -> {
+              if (throwable != null) {
+                Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
+                log.atWarn()
+                    .addKeyValue("eventId", claim.eventId())
+                    .addKeyValue("attempt", claim.attempt())
+                    .addKeyValue("result", "state_update_failed")
+                    .addKeyValue("errorType", cause.getClass().getSimpleName())
+                    .log("Outbox 이벤트 결과 반영 실패");
+              }
             });
   }
 }
