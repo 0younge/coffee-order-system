@@ -73,21 +73,24 @@ class OutboxStoreTest {
   void claimsDueAndExpiredRowsInOrder() {
     String expired =
         insertProcessingEvent(NOW.minusSeconds(100), NOW.minusSeconds(31), NOW.minusSeconds(200));
+    String expiredBoundary =
+        insertProcessingEvent(NOW.minusSeconds(90), NOW.minusSeconds(30), NOW.minusSeconds(190));
     String firstDue = insertPendingEvent(0, NOW.minusSeconds(2), NOW.minusSeconds(4), null, null);
     String secondDue = insertPendingEvent(0, NOW.minusSeconds(2), NOW.minusSeconds(3), null, null);
+    String dueBoundary = insertPendingEvent(0, NOW, NOW.minusSeconds(2), null, null);
     String future = insertPendingEvent(0, NOW.plusSeconds(1), NOW.minusSeconds(2), null, null);
     String active =
         insertProcessingEvent(NOW.minusSeconds(100), NOW.minusSeconds(29), NOW.minusSeconds(1));
 
-    List<OutboxClaim> firstBatch = outboxStore.claim(NOW, 2);
+    List<OutboxClaim> firstBatch = outboxStore.claim(NOW, 3);
     List<OutboxClaim> secondBatch = outboxStore.claim(NOW, 10);
 
-    assertEquals(List.of(expired, firstDue), eventIds(firstBatch));
-    assertEquals(List.of(secondDue), eventIds(secondBatch));
+    assertEquals(List.of(expired, expiredBoundary, firstDue), eventIds(firstBatch));
+    assertEquals(List.of(secondDue, dueBoundary), eventIds(secondBatch));
     assertTrue(firstBatch.stream().allMatch(claim -> claim.claimToken().length() == 36));
     assertEquals("PENDING", status(future));
     assertEquals("PROCESSING", status(active));
-    assertEquals(5L, count("SELECT COUNT(*) FROM outbox_events WHERE order_id IN " + orderIds()));
+    assertEquals(7L, count("SELECT COUNT(*) FROM outbox_events WHERE order_id IN " + orderIds()));
   }
 
   @Test

@@ -16,7 +16,7 @@ class OutboxDeliveryClassifierTest {
   private final OutboxDeliveryClassifier classifier = new OutboxDeliveryClassifier();
 
   @Test
-  @DisplayName("UT-OUTBOX-001 HTTP 상태를 성공·재시도·영구 실패로 분류한다")
+  @DisplayName("UT-OUTBOX-002 HTTP 상태를 성공·재시도·영구 실패로 분류한다")
   void classifiesHttpStatus() {
     assertTrue(classifier.classify(200).published());
     assertTrue(classifier.classify(299).published());

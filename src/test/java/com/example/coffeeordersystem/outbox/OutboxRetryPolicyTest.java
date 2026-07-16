@@ -13,7 +13,7 @@ class OutboxRetryPolicyTest {
   private final Instant failedAt = Instant.parse("2026-07-16T00:00:00Z");
 
   @Test
-  @DisplayName("UT-OUTBOX-003 실패 횟수별 1분·5분·30분 재시도를 예약한다")
+  @DisplayName("UT-OUTBOX-001 실패 횟수별 1분·5분·30분 재시도를 예약한다")
   void schedulesApprovedRetryDelays() {
     assertEquals(failedAt.plusSeconds(60), retryPolicy.nextRetryAt(1, failedAt).orElseThrow());
     assertEquals(failedAt.plusSeconds(300), retryPolicy.nextRetryAt(2, failedAt).orElseThrow());

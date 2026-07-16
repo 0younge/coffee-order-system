@@ -42,12 +42,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
-@SpringBootTest(
-    properties = {
-      "outbox.worker.enabled=true",
-      "outbox.worker.poll-interval-ms=100",
-      "outbox.worker.batch-size=50"
-    })
+@SpringBootTest(properties = {"outbox.worker.enabled=true", "outbox.worker.batch-size=50"})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class OutboxWorkerIntegrationTest {
@@ -141,6 +136,9 @@ class OutboxWorkerIntegrationTest {
     assertEquals(eventId, objectMapper.readTree(request.body()).get("eventId").stringValue());
     assertEquals(
         "ORDER_PAID", objectMapper.readTree(request.body()).get("eventType").stringValue());
+    assertEquals(
+        committedAt,
+        Instant.parse(objectMapper.readTree(request.body()).get("occurredAt").stringValue()));
     assertEquals(userId, objectMapper.readTree(request.body()).get("userId").longValue());
     assertEquals(menuId, objectMapper.readTree(request.body()).get("menuId").longValue());
     assertEquals(4_000L, objectMapper.readTree(request.body()).get("paymentAmount").longValue());
@@ -148,6 +146,25 @@ class OutboxWorkerIntegrationTest {
 
     MOCK_API.release();
     await(() -> "PUBLISHED".equals(statusOf(eventId)), Duration.ofSeconds(2));
+  }
+
+  @Test
+  @DisplayName("EXT-OUTBOX-002 인스턴스마다 활성 배치를 하나만 유지한다")
+  void keepsOnlyOneActiveBatchPerInstance() throws Exception {
+    MOCK_API.reset(1, List.of(204, 204), true, true);
+    String firstEventId = insertEventsInOneTransaction(1).get(0);
+    assertTrue(MOCK_API.awaitRequests(Duration.ofSeconds(2)));
+
+    String secondEventId = insertEventsInOneTransaction(1).get(0);
+
+    assertTrue(MOCK_API.hasRequestCountFor(1, Duration.ofMillis(1_300)));
+    assertEquals("PROCESSING", statusOf(firstEventId));
+    assertEquals("PENDING", statusOf(secondEventId));
+
+    MOCK_API.release();
+    assertTrue(MOCK_API.awaitRequestCount(2, Duration.ofSeconds(2)));
+    await(() -> "PUBLISHED".equals(statusOf(firstEventId)), Duration.ofSeconds(2));
+    await(() -> "PUBLISHED".equals(statusOf(secondEventId)), Duration.ofSeconds(2));
   }
 
   @Test
@@ -359,6 +376,28 @@ class OutboxWorkerIntegrationTest {
 
     boolean awaitRequests(Duration timeout) throws InterruptedException {
       return requestsLatch.await(timeout.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    boolean awaitRequestCount(int expected, Duration timeout) throws InterruptedException {
+      long deadline = System.nanoTime() + timeout.toNanos();
+      while (System.nanoTime() < deadline) {
+        if (requests.size() >= expected) {
+          return true;
+        }
+        Thread.sleep(20);
+      }
+      return requests.size() >= expected;
+    }
+
+    boolean hasRequestCountFor(int expected, Duration duration) throws InterruptedException {
+      long deadline = System.nanoTime() + duration.toNanos();
+      while (System.nanoTime() < deadline) {
+        if (requests.size() != expected) {
+          return false;
+        }
+        Thread.sleep(20);
+      }
+      return requests.size() == expected;
     }
 
     void release() {

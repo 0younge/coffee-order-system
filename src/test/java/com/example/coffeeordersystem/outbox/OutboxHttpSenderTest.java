@@ -56,12 +56,14 @@ class OutboxHttpSenderTest {
     AtomicReference<String> method = new AtomicReference<>();
     AtomicReference<String> body = new AtomicReference<>();
     AtomicReference<String> authorization = new AtomicReference<>();
+    AtomicReference<String> contentType = new AtomicReference<>();
     server.createContext(
         "/events/orders",
         exchange -> {
           method.set(exchange.getRequestMethod());
           body.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
           authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+          contentType.set(exchange.getRequestHeaders().getFirst("Content-Type"));
           respond(exchange, 204);
         });
     String payload =
@@ -73,10 +75,11 @@ class OutboxHttpSenderTest {
     assertEquals("POST", method.get());
     assertEquals(payload, body.get());
     assertNull(authorization.get());
+    assertEquals("application/json", contentType.get());
   }
 
   @Test
-  @DisplayName("EXT-OUTBOX-002 3xx를 따라가지 않고 영구 실패로 분류한다")
+  @DisplayName("EXT-OUTBOX-004 3xx를 따라가지 않고 영구 실패로 분류한다")
   void doesNotFollowRedirect() throws Exception {
     AtomicInteger redirectedRequests = new AtomicInteger();
     server.createContext(
@@ -102,7 +105,7 @@ class OutboxHttpSenderTest {
   }
 
   @Test
-  @DisplayName("EXT-OUTBOX-003 408·429·5xx와 그 밖의 4xx를 정책대로 분류한다")
+  @DisplayName("EXT-OUTBOX-003 EXT-OUTBOX-004 HTTP 실패를 정책대로 분류한다")
   void classifiesMockApiResponses() throws Exception {
     AtomicInteger status = new AtomicInteger(408);
     server.createContext("/events/orders", exchange -> respond(exchange, status.get()));
@@ -118,7 +121,7 @@ class OutboxHttpSenderTest {
   }
 
   @Test
-  @DisplayName("EXT-OUTBOX-004 요청 전체 timeout은 5초 뒤 재시도 대상으로 분류한다")
+  @DisplayName("UT-OUTBOX-003 EXT-OUTBOX-003 요청 전체 timeout은 5초다")
   void timesOutWholeRequest() throws Exception {
     server.createContext(
         "/events/orders",
@@ -141,7 +144,7 @@ class OutboxHttpSenderTest {
   }
 
   @Test
-  @DisplayName("EXT-OUTBOX-005 네트워크 연결 실패는 HTTP 상태 없이 재시도한다")
+  @DisplayName("EXT-OUTBOX-003 네트워크 연결 실패는 HTTP 상태 없이 재시도한다")
   void retriesNetworkFailure() throws Exception {
     OutboxHttpSender sender = sender();
     server.stop(0);

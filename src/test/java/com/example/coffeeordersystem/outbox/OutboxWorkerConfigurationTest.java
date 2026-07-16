@@ -16,7 +16,7 @@ class OutboxWorkerConfigurationTest {
   private final OutboxWorkerConfiguration configuration = new OutboxWorkerConfiguration();
 
   @Test
-  @DisplayName("QT-CONFIG-001 외부 주소와 HTTP 클라이언트 설정을 엄격하게 검증한다")
+  @DisplayName("UT-OUTBOX-003 QT-CONFIG-001 HTTP 클라이언트와 외부 주소를 검증한다")
   void validatesBaseUrlAndClientPolicy() {
     HttpClient client = configuration.outboxHttpClient();
 
