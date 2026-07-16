@@ -3,6 +3,10 @@ package com.example.coffeeordersystem.order;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.example.coffeeordersystem.common.api.ApiResponseJsonCodec;
+import com.example.coffeeordersystem.order.application.OrderCommand;
+import com.example.coffeeordersystem.order.application.OrderFacade;
+import com.example.coffeeordersystem.order.application.OrderResult;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -31,7 +35,9 @@ class OrderConcurrencyTest {
 
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(8_700_000_000L);
 
-  @Autowired private OrderService orderService;
+  @Autowired private OrderFacade orderFacade;
+
+  @Autowired private ApiResponseJsonCodec responseJsonCodec;
 
   @Autowired private JdbcTemplate jdbcTemplate;
 
@@ -75,7 +81,7 @@ class OrderConcurrencyTest {
 
     Set<String> resultCodes =
         results.stream()
-            .map(result -> result.body().get("code").stringValue())
+            .map(result -> body(result).get("code").stringValue())
             .collect(Collectors.toSet());
     assertEquals(Set.of("ORDER_PAID", "INSUFFICIENT_POINT"), resultCodes);
     assertEquals(1_000L, balance());
@@ -98,11 +104,11 @@ class OrderConcurrencyTest {
     assertTrue(results.stream().allMatch(result -> result.httpStatus() == 201));
     assertTrue(
         results.stream()
-            .allMatch(result -> "ORDER_PAID".equals(result.body().get("code").stringValue())));
+            .allMatch(result -> "ORDER_PAID".equals(body(result).get("code").stringValue())));
     assertEquals(
         1L,
         results.stream()
-            .map(result -> result.body().get("data").get("orderId").longValue())
+            .map(result -> body(result).get("data").get("orderId").longValue())
             .distinct()
             .count());
     assertEquals(1_000L, balance());
@@ -126,7 +132,7 @@ class OrderConcurrencyTest {
 
     Set<String> resultCodes =
         results.stream()
-            .map(result -> result.body().get("code").stringValue())
+            .map(result -> body(result).get("code").stringValue())
             .collect(Collectors.toSet());
     assertEquals(Set.of("ORDER_PAID", "IDEMPOTENCY_KEY_REUSED"), resultCodes);
     assertEquals(1_000L, balance());
@@ -146,7 +152,7 @@ class OrderConcurrencyTest {
                       executor.submit(
                           () -> {
                             assertTrue(start.await(2, TimeUnit.SECONDS));
-                            return orderService.place(command);
+                            return orderFacade.place(command);
                           }))
               .toList();
       start.countDown();
@@ -166,7 +172,11 @@ class OrderConcurrencyTest {
   }
 
   private OrderCommand command(long targetMenuId, String idempotencyKey) {
-    return OrderCommand.from(new OrderRequest(userId, targetMenuId), idempotencyKey);
+    return OrderCommand.from(userId, targetMenuId, idempotencyKey);
+  }
+
+  private tools.jackson.databind.JsonNode body(OrderResult result) {
+    return responseJsonCodec.read(result.responseBody());
   }
 
   private long balance() {

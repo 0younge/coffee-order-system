@@ -1,4 +1,4 @@
-package com.example.coffeeordersystem.order;
+package com.example.coffeeordersystem.order.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "orders")
-class Order {
+public class Order {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -51,12 +51,21 @@ class Order {
     this.createdAt = paidAt;
   }
 
-  static Order paid(
+  public static Order paid(
       long userId, long menuId, String menuNameSnapshot, long paidAmount, Instant paidAt) {
+    if (userId <= 0
+        || menuId <= 0
+        || menuNameSnapshot == null
+        || menuNameSnapshot.isBlank()
+        || menuNameSnapshot.length() > 100
+        || paidAmount <= 0
+        || paidAt == null) {
+      throw new IllegalArgumentException("결제 완료 주문 값이 유효하지 않습니다.");
+    }
     return new Order(userId, menuId, menuNameSnapshot, paidAmount, paidAt);
   }
 
-  long id() {
+  public long id() {
     return id;
   }
 }

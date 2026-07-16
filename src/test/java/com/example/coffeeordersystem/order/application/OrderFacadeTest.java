@@ -1,21 +1,23 @@
-package com.example.coffeeordersystem.order;
+package com.example.coffeeordersystem.order.application;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doReturn;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.example.coffeeordersystem.common.api.ApiResponseJsonCodec;
 import com.example.coffeeordersystem.common.observability.BusinessEventLogger;
 import com.example.coffeeordersystem.idempotency.application.IdempotencyClaim;
 import com.example.coffeeordersystem.idempotency.application.IdempotencyFacade;
 import com.example.coffeeordersystem.idempotency.application.IdempotencyOperation;
+import com.example.coffeeordersystem.idempotency.application.IdempotencyResponseCodec;
 import com.example.coffeeordersystem.idempotency.application.RequestHasher;
 import com.example.coffeeordersystem.menu.application.MenuQueryFacade;
 import com.example.coffeeordersystem.menu.application.MenuSnapshot;
+import com.example.coffeeordersystem.order.domain.Order;
+import com.example.coffeeordersystem.order.infrastructure.OrderRepository;
 import com.example.coffeeordersystem.outbox.application.OutboxEventAppender;
 import com.example.coffeeordersystem.point.application.LockedPointBalance;
 import com.example.coffeeordersystem.point.application.PointPaymentFacade;
@@ -29,9 +31,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.JsonNode;
 
-class OrderServiceTest {
+class OrderFacadeTest {
+
+  private static final String IDEMPOTENCY_KEY = "11111111-1111-4111-8111-111111111111";
 
   @Test
   @DisplayName("CT-ORDER-001 사용자 락을 얻은 뒤 결제 시각을 확정한다")
@@ -42,7 +45,7 @@ class OrderServiceTest {
     MenuQueryFacade menuQueryFacade = mock(MenuQueryFacade.class);
     OrderRepository orderRepository = mock(OrderRepository.class);
     OutboxEventAppender outboxEventAppender = mock(OutboxEventAppender.class);
-    ApiResponseJsonCodec responseJsonCodec = mock(ApiResponseJsonCodec.class);
+    IdempotencyResponseCodec responseCodec = mock(IdempotencyResponseCodec.class);
     Clock clock = mock(Clock.class);
     BusinessEventLogger businessEventLogger = mock(BusinessEventLogger.class);
     LockedPointBalance pointBalance = mock(LockedPointBalance.class);
@@ -61,7 +64,7 @@ class OrderServiceTest {
     when(clock.instant()).thenReturn(clockInstant);
     when(requestHasher.hash(IdempotencyOperation.ORDER, 2L)).thenReturn("request-hash");
     when(idempotencyFacade.claim(
-            1L, IdempotencyOperation.ORDER, "idempotency-key", "request-hash", paidAt))
+            1L, IdempotencyOperation.ORDER, IDEMPOTENCY_KEY, "request-hash", paidAt))
         .thenReturn(new IdempotencyClaim(3L, "request-hash", "PROCESSING", null, null));
     when(menuQueryFacade.findById(2L)).thenReturn(Optional.of(new MenuSnapshot(2L, "메뉴", 4_000L)));
     when(pointBalance.pay(4_000L, paidAt)).thenReturn(true);
@@ -70,24 +73,23 @@ class OrderServiceTest {
     when(savedOrder.id()).thenReturn(4L);
     when(orderRepository.save(any(Order.class))).thenReturn(savedOrder);
     when(outboxEventAppender.appendOrderPaid(4L, 1L, 2L, 4_000L, paidAt)).thenReturn("event-id");
-    when(responseJsonCodec.write(any())).thenReturn("response-body");
-    doReturn(mock(JsonNode.class)).when(responseJsonCodec).read("response-body");
+    when(responseCodec.encodeSuccess(anyString(), anyString(), any())).thenReturn("response-body");
 
-    OrderService orderService =
-        new OrderService(
+    OrderFacade orderFacade =
+        new OrderFacade(
             pointPaymentFacade,
             idempotencyFacade,
             requestHasher,
             menuQueryFacade,
             orderRepository,
             outboxEventAppender,
-            responseJsonCodec,
+            responseCodec,
             clock,
             businessEventLogger);
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try {
       var result =
-          executor.submit(() -> orderService.place(new OrderCommand(1L, 2L, "idempotency-key")));
+          executor.submit(() -> orderFacade.place(OrderCommand.from(1L, 2L, IDEMPOTENCY_KEY)));
 
       assertTrue(lockAttempted.await(2, TimeUnit.SECONDS));
       verifyNoInteractions(clock);

@@ -1,8 +1,8 @@
-package com.example.coffeeordersystem.order;
+package com.example.coffeeordersystem.order.application;
 
 import java.time.Instant;
 
-record OrderResponse(
+record OrderData(
     long orderId,
     long menuId,
     String menuName,

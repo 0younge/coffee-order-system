@@ -115,20 +115,51 @@ class LayeredArchitectureTest {
         Files.readString(MAIN_SOURCE.resolve("point/api/PointController.java"));
     verifyPointControllerFacadeOnly(
         new SourceFile(MAIN_SOURCE.resolve("point/api/PointController.java"), pointController));
-    String orderService = Files.readString(MAIN_SOURCE.resolve("order/OrderService.java"));
     assertTrue(
-        orderService.contains("menu.application.MenuQueryFacade")
-            && orderService.contains("menu.application.MenuSnapshot"),
+        Files.exists(MAIN_SOURCE.resolve("order/api/OrderController.java")),
+        "Order Controller는 API 계층에 있어야 합니다.");
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("order/application/OrderFacade.java")),
+        "Order는 공개 Application Facade를 제공해야 합니다.");
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("order/domain/Order.java")),
+        "Order Entity는 Domain 계층에 있어야 합니다.");
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("order/infrastructure/OrderRepository.java")),
+        "Order Repository는 Infrastructure 계층에 있어야 합니다.");
+    assertFalse(
+        sources.stream()
+            .filter(source -> normalized(source.path()).contains("/order/"))
+            .map(source -> source.path().getFileName().toString())
+            .anyMatch(name -> name.equals("OrderService.java")),
+        "OrderFacade 뒤에 기존 Service 위임 계층을 남길 수 없습니다.");
+    String orderController =
+        Files.readString(MAIN_SOURCE.resolve("order/api/OrderController.java"));
+    verifyOrderControllerFacadeOnly(
+        new SourceFile(MAIN_SOURCE.resolve("order/api/OrderController.java"), orderController));
+    String orderCommand =
+        Files.readString(MAIN_SOURCE.resolve("order/application/OrderCommand.java"));
+    assertFalse(
+        orderCommand.contains("public record OrderCommand"),
+        "OrderCommand는 공개 canonical constructor로 검증을 우회할 수 없습니다.");
+    assertTrue(
+        orderCommand.contains("private OrderCommand("), "OrderCommand 생성은 검증된 정적 팩터리로 제한해야 합니다.");
+    String orderFacade =
+        Files.readString(MAIN_SOURCE.resolve("order/application/OrderFacade.java"));
+    assertTrue(orderFacade.contains("@Transactional"), "OrderFacade가 주문 트랜잭션 경계를 소유해야 합니다.");
+    assertTrue(
+        orderFacade.contains("menu.application.MenuQueryFacade")
+            && orderFacade.contains("menu.application.MenuSnapshot"),
         "Order는 Menu Application Facade와 Snapshot 계약만 사용해야 합니다.");
-    assertFalse(orderService.contains("MenuResponse"), "Order는 Menu API 응답 DTO를 사용할 수 없습니다.");
+    assertFalse(orderFacade.contains("MenuResponse"), "Order는 Menu API 응답 DTO를 사용할 수 없습니다.");
     assertTrue(
-        orderService.contains("point.application.PointPaymentFacade")
-            && orderService.contains("point.application.LockedPointBalance"),
+        orderFacade.contains("point.application.PointPaymentFacade")
+            && orderFacade.contains("point.application.LockedPointBalance"),
         "Order는 Point Application 결제 계약만 사용해야 합니다.");
     assertFalse(
-        orderService.contains("point.api.")
-            || orderService.contains("point.domain.")
-            || orderService.contains("point.infrastructure."),
+        orderFacade.contains("point.api.")
+            || orderFacade.contains("point.domain.")
+            || orderFacade.contains("point.infrastructure."),
         "Order는 Point API, Domain, Infrastructure를 직접 참조할 수 없습니다.");
     assertTrue(
         Files.exists(MAIN_SOURCE.resolve("outbox/application/OutboxEventAppender.java")),
@@ -147,12 +178,12 @@ class LayeredArchitectureTest {
             .anyMatch(name -> name.equals("OutboxEventWriter.java")),
         "기존 OutboxEventWriter를 공개 구현으로 남길 수 없습니다.");
     assertTrue(
-        orderService.contains("outbox.application.OutboxEventAppender"),
+        orderFacade.contains("outbox.application.OutboxEventAppender"),
         "Order는 Outbox Application 기록 계약만 사용해야 합니다.");
     assertFalse(
-        orderService.contains("outbox.api.")
-            || orderService.contains("outbox.domain.")
-            || orderService.contains("outbox.infrastructure."),
+        orderFacade.contains("outbox.api.")
+            || orderFacade.contains("outbox.domain.")
+            || orderFacade.contains("outbox.infrastructure."),
         "Order는 Outbox API, Domain, Infrastructure를 직접 참조할 수 없습니다.");
   }
 
@@ -206,6 +237,15 @@ class LayeredArchitectureTest {
     assertThrows(
         AssertionError.class,
         () -> verifyPointControllerFacadeOnly(pointControllerWithExtraDependency));
+    SourceFile orderControllerWithExtraDependency =
+        syntheticSource(
+            "order/api/OrderController.java",
+            "class OrderController {\n"
+                + " private final OrderFacade orderFacade;\n"
+                + " private final OrderRepository orderRepository;\n}");
+    assertThrows(
+        AssertionError.class,
+        () -> verifyOrderControllerFacadeOnly(orderControllerWithExtraDependency));
 
     SourceFile store =
         syntheticSource(
@@ -368,6 +408,22 @@ class LayeredArchitectureTest {
         source.contents().contains("com.example.coffeeordersystem.point.domain.")
             || source.contents().contains("com.example.coffeeordersystem.point.infrastructure."),
         "PointController는 Point Domain이나 Infrastructure를 직접 참조할 수 없습니다.");
+  }
+
+  private void verifyOrderControllerFacadeOnly(SourceFile source) {
+    assertTrue(
+        source.contents().contains("OrderFacade"), "OrderController는 OrderFacade를 사용해야 합니다.");
+    assertEquals(
+        1,
+        source.contents().lines().filter(line -> line.contains("private final ")).count(),
+        "OrderController의 주입 의존성은 OrderFacade 하나여야 합니다.");
+    assertTrue(
+        source.contents().contains("private final OrderFacade orderFacade;"),
+        "OrderController는 OrderFacade를 생성자 주입해야 합니다.");
+    assertFalse(
+        source.contents().contains("com.example.coffeeordersystem.order.domain.")
+            || source.contents().contains("com.example.coffeeordersystem.order.infrastructure."),
+        "OrderController는 Order Domain이나 Infrastructure를 직접 참조할 수 없습니다.");
   }
 
   private void verifyDomainIndependence(SourceFile source) {

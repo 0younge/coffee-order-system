@@ -1,4 +1,4 @@
-package com.example.coffeeordersystem.order;
+package com.example.coffeeordersystem.order.api;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
