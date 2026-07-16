@@ -69,7 +69,7 @@
 1. 구현: [Common API](../src/main/java/com/example/coffeeordersystem/common/api), [Common error](../src/main/java/com/example/coffeeordersystem/common/error), [Common observability](../src/main/java/com/example/coffeeordersystem/common/observability); 기존 코드를 승인 경계 밖으로 추가 이동하지 않고 Common의 기능 독립성과 최소 하위 패키지를 구조 테스트로 고정
 2. 테스트: `UT-API-001`, `UT-IDEM-003`, `AT-CONTRACT-004`, `QT-OBS-001`~`002`, API 회귀와 `QT-ARCH-001` — [Common 테스트](../src/test/java/com/example/coffeeordersystem/common), [LayeredArchitectureTest.java](../src/test/java/com/example/coffeeordersystem/quality/LayeredArchitectureTest.java)
 3. 실행: 2026-07-17 MySQL 8.4 healthy에서 직접 관련 테스트 36개 성공, 실패·오류·제외 0개. `./gradlew clean check build` 성공; 전체 115개, 성공 115개, 실패·오류·제외 0개. `./gradlew bootRun` 시작과 `GET /actuator/health`의 `UP`을 확인했다.
-4. 재현 커밋: `c82e32f`(Common 독립성·최소 경계 구조 테스트); GitHub 작업 이슈 `#32`
+4. 재현 커밋: `c82e32f`(Common 독립성·최소 경계 구조 테스트), `2987302`(구조 문서와 실행 증거), `6b14ce3`(Common 루트 소스 차단과 결합 강제 제거); GitHub 작업 이슈 `#32`
 
 ### 기반선 검증 증거 (GitHub #1)
 
