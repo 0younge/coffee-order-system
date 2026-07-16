@@ -2,9 +2,8 @@ package com.example.coffeeordersystem.point;
 
 import com.example.coffeeordersystem.common.error.ApiException;
 import com.example.coffeeordersystem.common.error.ErrorCode;
+import com.example.coffeeordersystem.idempotency.IdempotencyKeyNormalizer;
 import java.math.BigInteger;
-import java.util.Locale;
-import java.util.UUID;
 
 record ChargeCommand(long userId, long amount, String idempotencyKey) {
 
@@ -15,7 +14,7 @@ record ChargeCommand(long userId, long amount, String idempotencyKey) {
       throw new ApiException(ErrorCode.INVALID_REQUEST);
     }
     long amount = validAmount(request.amount());
-    String idempotencyKey = normalizeUuid(rawIdempotencyKey);
+    String idempotencyKey = IdempotencyKeyNormalizer.normalize(rawIdempotencyKey);
     return new ChargeCommand(request.userId(), amount, idempotencyKey);
   }
 
@@ -24,21 +23,5 @@ record ChargeCommand(long userId, long amount, String idempotencyKey) {
       throw new ApiException(ErrorCode.INVALID_CHARGE_AMOUNT);
     }
     return amount.longValueExact();
-  }
-
-  private static String normalizeUuid(String rawIdempotencyKey) {
-    if (rawIdempotencyKey == null) {
-      throw new ApiException(ErrorCode.INVALID_REQUEST);
-    }
-    try {
-      UUID uuid = UUID.fromString(rawIdempotencyKey);
-      String normalized = uuid.toString();
-      if (!normalized.equals(rawIdempotencyKey.toLowerCase(Locale.ROOT))) {
-        throw new ApiException(ErrorCode.INVALID_REQUEST);
-      }
-      return normalized;
-    } catch (IllegalArgumentException exception) {
-      throw new ApiException(ErrorCode.INVALID_REQUEST);
-    }
   }
 }

@@ -7,7 +7,7 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "menus")
-class Menu {
+public class Menu {
 
   @Id private Long id;
 
@@ -19,15 +19,15 @@ class Menu {
 
   protected Menu() {}
 
-  Long id() {
+  public Long id() {
     return id;
   }
 
-  String name() {
+  public String name() {
     return name;
   }
 
-  long price() {
+  public long price() {
     return price;
   }
 }

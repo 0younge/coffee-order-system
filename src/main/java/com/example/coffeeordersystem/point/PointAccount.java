@@ -8,7 +8,7 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "users")
-class PointAccount {
+public class PointAccount {
 
   @Id private Long id;
 
@@ -26,12 +26,21 @@ class PointAccount {
     this.updatedAt = updatedAt;
   }
 
-  long pointBalance() {
+  public long pointBalance() {
     return pointBalance;
   }
 
   void charge(long amount, Instant now) {
     pointBalance = Math.addExact(pointBalance, amount);
     updatedAt = now;
+  }
+
+  public boolean pay(long amount, Instant now) {
+    if (pointBalance < amount) {
+      return false;
+    }
+    pointBalance -= amount;
+    updatedAt = now;
+    return true;
   }
 }
