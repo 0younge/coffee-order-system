@@ -36,9 +36,11 @@ class OutboxWorkerConfiguration {
     }
     int port = uri.getPort();
     boolean invalidPort = port != -1 && (port < 1 || port > 65_535);
+    boolean emptyPort = uri.getRawAuthority() != null && uri.getRawAuthority().endsWith(":");
     if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
         || uri.getHost() == null
         || invalidPort
+        || emptyPort
         || uri.getUserInfo() != null
         || uri.getQuery() != null
         || uri.getFragment() != null) {

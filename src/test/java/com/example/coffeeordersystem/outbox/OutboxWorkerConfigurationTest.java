@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class OutboxWorkerConfigurationTest {
@@ -51,6 +52,8 @@ class OutboxWorkerConfigurationTest {
     assertThrows(
         IllegalStateException.class,
         () -> configuration.collectionApiBaseUri("http://localhost:99999"));
+    assertThrows(
+        IllegalStateException.class, () -> configuration.collectionApiBaseUri("http://localhost:"));
   }
 
   @Test
@@ -72,9 +75,11 @@ class OutboxWorkerConfigurationTest {
     runner
         .withPropertyValues("COLLECTION_API_BASE_URL=ftp://localhost")
         .run(context -> assertNotNull(context.getStartupFailure()));
-    runner
+    new ApplicationContextRunner()
+        .withInitializer(new ConfigDataApplicationContextInitializer())
+        .withUserConfiguration(OutboxWorkerConfiguration.class)
         .withPropertyValues(
-            "COLLECTION_API_BASE_URL=http://localhost:8081", "outbox.worker.poll-interval-ms=1001")
+            "COLLECTION_API_BASE_URL=http://localhost:8081", "OUTBOX_POLL_INTERVAL_MS=1001")
         .run(context -> assertNotNull(context.getStartupFailure()));
     runner
         .withPropertyValues("outbox.worker.enabled=false")
