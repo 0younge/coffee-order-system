@@ -95,6 +95,14 @@ class LayeredArchitectureTest {
     assertTrue(
         Files.exists(MAIN_SOURCE.resolve("point/application/PointPaymentFacade.java")),
         "Point 결제는 주문이 사용할 공개 Application Facade를 제공해야 합니다.");
+    String chargeCommand =
+        Files.readString(MAIN_SOURCE.resolve("point/application/ChargeCommand.java"));
+    assertFalse(
+        chargeCommand.contains("public record ChargeCommand"),
+        "ChargeCommand는 공개 canonical constructor로 검증을 우회할 수 없습니다.");
+    assertTrue(
+        chargeCommand.contains("private ChargeCommand("),
+        "ChargeCommand 생성은 검증된 정적 팩터리로 제한해야 합니다.");
     assertFalse(
         sources.stream()
             .filter(source -> normalized(source.path()).contains("/point/"))

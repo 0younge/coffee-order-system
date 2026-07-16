@@ -16,6 +16,7 @@ import com.example.coffeeordersystem.idempotency.application.IdempotencyResponse
 import com.example.coffeeordersystem.idempotency.application.RequestHasher;
 import com.example.coffeeordersystem.point.domain.PointAccount;
 import com.example.coffeeordersystem.point.infrastructure.PointAccountRepository;
+import java.math.BigInteger;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
@@ -27,6 +28,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class PointFacadeTest {
+
+  private static final String IDEMPOTENCY_KEY = "11111111-1111-4111-8111-111111111111";
 
   @Test
   @DisplayName("CT-POINT-001 사용자 락을 얻은 뒤 충전 시각을 확정한다")
@@ -52,7 +55,7 @@ class PointFacadeTest {
     when(clock.instant()).thenReturn(chargedAt);
     when(requestHasher.hash(IdempotencyOperation.CHARGE, 100L)).thenReturn("request-hash");
     when(idempotencyFacade.claim(
-            1L, IdempotencyOperation.CHARGE, "idempotency-key", "request-hash", chargedAt))
+            1L, IdempotencyOperation.CHARGE, IDEMPOTENCY_KEY, "request-hash", chargedAt))
         .thenReturn(new IdempotencyClaim(3L, "request-hash", "PROCESSING", null, null));
     when(account.pointBalance()).thenReturn(200L);
     when(responseCodec.encodeSuccess(anyString(), anyString(), any())).thenReturn("response-body");
@@ -68,7 +71,10 @@ class PointFacadeTest {
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try {
       var result =
-          executor.submit(() -> pointFacade.charge(new ChargeCommand(1L, 100L, "idempotency-key")));
+          executor.submit(
+              () ->
+                  pointFacade.charge(
+                      ChargeCommand.from(1L, BigInteger.valueOf(100L), IDEMPOTENCY_KEY)));
 
       assertTrue(lockAttempted.await(2, TimeUnit.SECONDS));
       verifyNoInteractions(clock);

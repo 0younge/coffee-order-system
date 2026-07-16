@@ -55,4 +55,17 @@ class PointAccountTest {
     assertFalse(paid);
     assertEquals(3_999L, account.pointBalance());
   }
+
+  @Test
+  @DisplayName("UT-POINT-002 0 이하 금액은 충전·결제 상태를 변경하지 않는다")
+  void rejectsNonPositivePointChanges() {
+    Instant now = Instant.parse("2026-07-16T00:00:00Z");
+    PointAccount account = new PointAccount(1L, 100L, now.minusSeconds(1));
+
+    assertThrows(IllegalArgumentException.class, () -> account.charge(0L, now));
+    assertThrows(IllegalArgumentException.class, () -> account.charge(-1L, now));
+    assertThrows(IllegalArgumentException.class, () -> account.pay(0L, now));
+    assertThrows(IllegalArgumentException.class, () -> account.pay(-1L, now));
+    assertEquals(100L, account.pointBalance());
+  }
 }

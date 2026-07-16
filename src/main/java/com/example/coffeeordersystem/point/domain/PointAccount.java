@@ -32,16 +32,24 @@ public class PointAccount {
   }
 
   public void charge(long amount, Instant now) {
+    requirePositive(amount);
     pointBalance = Math.addExact(pointBalance, amount);
     updatedAt = now;
   }
 
   public boolean pay(long amount, Instant now) {
+    requirePositive(amount);
     if (pointBalance < amount) {
       return false;
     }
     pointBalance -= amount;
     updatedAt = now;
     return true;
+  }
+
+  private void requirePositive(long amount) {
+    if (amount <= 0) {
+      throw new IllegalArgumentException("포인트 변경 금액은 양수여야 합니다.");
+    }
   }
 }
