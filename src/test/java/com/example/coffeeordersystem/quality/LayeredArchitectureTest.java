@@ -364,6 +364,18 @@ class LayeredArchitectureTest {
     assertThrows(
         AssertionError.class,
         () -> verifyControllerUsesOwnFacadeOnly(controllerWithConstructorDependency));
+    SourceFile controllerWithPackagePrivateService =
+        syntheticSource(
+            "menu/api/PackagePrivateController.java",
+            "import com.example.coffeeordersystem.menu.application.MenuQueryFacade;\n"
+                + "@org.springframework.web.bind.annotation.RestController\n"
+                + "class PackagePrivateController {\n"
+                + "  private final MenuQueryFacade menuQueryFacade;\n"
+                + "  @Deprecated final com.example.coffeeordersystem.menu.application.MenuQueryService menuQueryService;\n"
+                + "}");
+    assertThrows(
+        AssertionError.class,
+        () -> verifyControllerUsesOwnFacadeOnly(controllerWithPackagePrivateService));
     SourceFile crossFeatureFlatLeak =
         syntheticSource(
             "order/application/LegacyPointCaller.java",
@@ -577,13 +589,14 @@ class LayeredArchitectureTest {
         .filter(
             line -> {
               String trimmed = line.trim();
-              if (!trimmed.endsWith(";") || trimmed.contains(" static ")) {
+              if (!trimmed.endsWith(";")
+                  || Pattern.compile("(?:^|\\s)static\\s").matcher(trimmed).find()) {
                 return false;
               }
               if (trimmed.matches("(?:private|protected|public)\\s+.*")) {
                 return true;
               }
-              return line.matches("^  [A-Z][A-Za-z0-9_$]*(?:<[^;]+>)?\\s+[a-zA-Z_$][\\w$]*;$");
+              return line.matches("^  \\S.*;$");
             })
         .map(String::trim)
         .toList();
