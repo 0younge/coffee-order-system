@@ -2,7 +2,7 @@
 
 ## 1. 문서 상태와 범위
 
-이 문서는 사용자가 선택한 커피 주문 시스템의 **목표 아키텍처**를 설명한다. ADR별 승인 여부는 [ADR 목록](./adr/)에서 관리한다. 저장소에는 Spring Boot 애플리케이션 기반선, MySQL Docker Compose, 개발·테스트 DB 분리와 Flyway 스키마·기준 데이터가 구현됐고, 업무 모듈·트랜잭션·워커는 아직 구현 중이다. 구현이 진행되면 코드, Flyway 마이그레이션, [ERD](./erd.md), [API 명세](./api-spec.md)가 이 문서와 일치하는지 함께 검증한다.
+이 문서는 사용자가 선택한 커피 주문 시스템의 **목표 아키텍처**를 설명한다. ADR별 승인 여부는 [ADR 목록](./adr/)에서 관리한다. 저장소에는 Spring Boot·MySQL·Flyway 기반선과 Menu 조회 모듈이 구현됐고, Point·Order·Idempotency·Outbox 모듈은 구현 중이다. 구현이 진행되면 코드, Flyway 마이그레이션, [ERD](./erd.md), [API 명세](./api-spec.md)가 이 문서와 일치하는지 함께 검증한다.
 
 범위는 하나의 배포 단위로 실행되는 REST API 백엔드, 공용 MySQL, 그리고 애플리케이션 내부 Outbox 워커까지다. 실제 클라우드 배포, 로드 밸런서 제품 선택, MySQL 고가용성 구성, 외부 수집 시스템 구현은 범위 밖이다.
 
