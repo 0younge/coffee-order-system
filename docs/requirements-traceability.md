@@ -61,7 +61,7 @@
 1. 구현: [GlobalExceptionHandler.java](../src/main/java/com/example/coffeeordersystem/common/error/GlobalExceptionHandler.java), [idempotency 패키지](../src/main/java/com/example/coffeeordersystem/idempotency), [point 패키지](../src/main/java/com/example/coffeeordersystem/point), [ADR 0025](./adr/0025-lock-user-before-idempotency-record.md)
 2. 테스트: `UT-POINT-001`~`002`, `UT-IDEM-001`~`002`, `IT-POINT-001`~`002`, `IT-IDEM-001`~`002`, `IT-RESILIENCE-001`, `AT-USER-001`, `AT-POINT-001`~`004`, 충전 범위의 `AT-CONTRACT-001`, `CT-POINT-001`~`002`, `CT-IDEM-001`~`002` — [RequestHasherTest.java](../src/test/java/com/example/coffeeordersystem/idempotency/RequestHasherTest.java), [point 테스트 패키지](../src/test/java/com/example/coffeeordersystem/point)
 3. 실행: 2026-07-16 MySQL 8.4 healthy에서 `./gradlew clean check build` 성공; 전체 44개, 성공 44개, 실패 0개, 제외 0개. 실제 사용자 행 락 대기·deadlock, 결과 저장 뒤 장애의 원자적 롤백, 같은 사용자와 서로 다른 사용자, 동일 멱등키 경쟁을 독립 트랜잭션으로 검증했다. `./gradlew bootRun`에서 `POST /api/v1/points/charge`의 100P→350P 충전과 동일 키 응답 재사용, `/actuator/health`의 `UP`을 확인했다.
-4. 재현 커밋: `21595d4`(구현), `263eb95`(deadlock 롤백 검증); GitHub 작업 이슈 `#3`
+4. 재현 커밋: `21595d4`(구현), `263eb95`(deadlock 롤백 검증), `26f81f2`(엄격 입력·원자성 보강); GitHub 작업 이슈 `#3`
 
 ## 3. 기능 요구사항 추적
 
