@@ -55,7 +55,7 @@
 1. 구현: [Order API](../src/main/java/com/example/coffeeordersystem/order/api), [OrderFacade.java](../src/main/java/com/example/coffeeordersystem/order/application/OrderFacade.java), [Order Entity](../src/main/java/com/example/coffeeordersystem/order/domain/Order.java), [OrderRepository.java](../src/main/java/com/example/coffeeordersystem/order/infrastructure/OrderRepository.java)
 2. 테스트: `UT-ORDER-001`~`002`, 기존 `IT-ORDER-*`·`IT-TIME-002`·`AT-ORDER-*`·`CT-ORDER-001`, 교차 인스턴스·Outbox 원자성·구조 경계 — [OrderCommandTest.java](../src/test/java/com/example/coffeeordersystem/order/application/OrderCommandTest.java), [OrderTest.java](../src/test/java/com/example/coffeeordersystem/order/domain/OrderTest.java), [OrderFacadeTest.java](../src/test/java/com/example/coffeeordersystem/order/application/OrderFacadeTest.java), [OrderConcurrencyTest.java](../src/test/java/com/example/coffeeordersystem/order/OrderConcurrencyTest.java), [LayeredArchitectureTest.java](../src/test/java/com/example/coffeeordersystem/quality/LayeredArchitectureTest.java)
 3. 실행: 2026-07-17 MySQL 8.4 healthy에서 직접 관련 테스트 28개 성공, 실패·제외 0개. `./gradlew clean check build` 성공; 전체 114개, 성공 114개, 실패·오류·제외 0개. `./gradlew bootRun` 시작과 `GET /actuator/health`의 `UP`을 확인했다.
-4. 재현 커밋: `bd6a0a2`(Order 계층 경계와 구조·회귀 테스트), `4946080`(문서 추적성); GitHub 작업 이슈 `#30`
+4. 재현 커밋: `bd6a0a2`(Order 계층 경계와 구조·회귀 테스트), `4946080`·`e82b077`(문서 추적성과 전용 증거), `0f0bb5b`(기존 스냅샷 허용 범위 보존); GitHub 작업 이슈 `#30`
 
 ### 기반선 검증 증거 (GitHub #1)
 
