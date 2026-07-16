@@ -142,6 +142,8 @@ com.example.coffeeordersystem
 
 역할이 없는 빈 패키지는 만들지 않는다. 한 줄 클래스 하나를 옮기기 위한 물리적 분리보다 package-private 접근과 책임이 드러나는 이름이 더 읽기 쉬운 작은 기능은 패키지를 생략하고 실제 예외를 이 절에 기록한다.
 
+현재 Idempotency는 공개 선점·완료 계약과 요청 식별을 `application`, JdbcTemplate 저장과 DB JSON 정규화를 `infrastructure`에 둔다. 별도의 독자적 Entity·Value Object·계산 규칙이 없으므로 빈 `domain` 패키지는 만들지 않으며, 처리 상태 전이 불변식은 기존 조건부 UPDATE SQL과 DB 제약에 유지한다.
+
 | 계층 | 책임 | 금지 경계 |
 |---|---|---|
 | API | Controller, Request, Response, Bean Validation, HTTP 입력과 응답 조립 | Repository 직접 호출, API DTO를 기능 간 계약으로 사용 |
@@ -154,6 +156,8 @@ com.example.coffeeordersystem
 Controller는 Application Facade만 호출한다. 현재 주문·충전 오케스트레이터는 별도 위임 계층을 추가하지 않고 각각 `OrderFacade`, `PointFacade`로 승격한다. 메뉴 조회는 `MenuQueryFacade`, 주문용 포인트 결제는 책임이 분명한 Point Application 계약, 멱등 처리는 `IdempotencyFacade`, 주문 이벤트 기록은 `OutboxEventAppender`, Outbox 전달 조정은 `OutboxDeliveryFacade`를 경계로 삼는다. 최종 이름은 같은 책임을 더 명확히 표현할 수 있지만 한 메서드를 그대로 Service에 전달하는 Facade는 만들지 않는다.
 
 API Request·Response는 API 계층에, Command·유스케이스 Result는 Application 계층에 둔다. Controller가 두 타입 사이를 변환한다. 최초 HTTP status와 JSON body를 그대로 저장·재사용해야 하는 멱등 응답 직렬화는 기능별 전용 codec 또는 assembler에 격리하며 일반 Application·Domain 로직에 Spring MVC·Jackson 타입을 퍼뜨리지 않는다.
+
+`response_body`는 MySQL JSON 컬럼이므로 저장 시 binary JSON의 canonical key 순서와 조회 공백이 적용된다. 전용 JSON codec이 DB 조회 결과를 compact canonical JSON으로 정규화하고 최초 응답도 저장 직후 같은 값을 사용해, 스키마를 바꾸지 않으면서 최초·저장·재사용 HTTP status와 JSON 필드·값·null을 동일하게 유지한다.
 
 `OutboxStore`의 claim·publish·fail SQL과 트랜잭션 상태 전이는 하나의 Infrastructure 응집 단위로 유지한다. 계층 모양을 맞추기 위한 임의 분해로 선점·fencing·결과 반영의 원자성을 약화하지 않는다. 공통 오류의 기존 `ErrorCode`–`HttpStatus` 결합도 분리로 매핑과 중복만 늘어나는 동안에는 유지한다.
 
