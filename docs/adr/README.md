@@ -38,6 +38,7 @@
 | [0022](./0022-accept-user-id-without-authentication.md) | 인증 없이 요청 본문의 사용자 ID 사용 | 승인됨 |
 | [0023](./0023-define-outbox-field-lifecycle.md) | Outbox 상태별 필드 수명주기 확정 | 승인됨 |
 | [0024](./0024-seed-reference-user-for-local-execution.md) | 과제와 로컬 실행용 기준 사용자 seed | 승인됨 |
+| [0025](./0025-lock-user-before-idempotency-record.md) | 사용자 행을 멱등 레코드보다 먼저 잠금 | 승인됨 |
 
 ADR 0022는 인증 결정을 직접 다룬 0008·0012·0021을 완전히 대체한다. 또한 0005의 Spring Security 기준선, 0006의 Auth 모듈, 0015의 인증 실패 예외, 0018의 공유 JWT 키 조건을 부분 대체한다. 이 조항들은 구현 계약으로 사용하지 않으며 각 ADR의 나머지 결정만 유지한다.
 

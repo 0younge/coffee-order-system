@@ -3,7 +3,13 @@ package com.example.coffeeordersystem.common.error;
 import com.example.coffeeordersystem.common.api.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -15,6 +21,27 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(ApiException.class)
   public ResponseEntity<ApiResponse<Void>> handleApiException(ApiException exception) {
     return errorResponse(exception.errorCode());
+  }
+
+  @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+  public ResponseEntity<ApiResponse<Void>> handleUnsupportedMediaType(
+      HttpMediaTypeNotSupportedException exception) {
+    return errorResponse(ErrorCode.UNSUPPORTED_MEDIA_TYPE);
+  }
+
+  @ExceptionHandler({
+    MethodArgumentNotValidException.class,
+    HttpMessageNotReadableException.class,
+    MissingRequestHeaderException.class
+  })
+  public ResponseEntity<ApiResponse<Void>> handleInvalidRequest(Exception exception) {
+    return errorResponse(ErrorCode.INVALID_REQUEST);
+  }
+
+  @ExceptionHandler({PessimisticLockingFailureException.class, QueryTimeoutException.class})
+  public ResponseEntity<ApiResponse<Void>> handleDatabaseContention(Exception exception) {
+    log.warn("DB 경합으로 요청 롤백 errorType={}", exception.getClass().getSimpleName());
+    return errorResponse(ErrorCode.TEMPORARILY_UNAVAILABLE);
   }
 
   @ExceptionHandler(Exception.class)
