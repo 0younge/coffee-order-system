@@ -12,7 +12,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import tools.jackson.core.JacksonException;
+import tools.jackson.core.JsonToken;
+import tools.jackson.databind.exc.MismatchedInputException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -39,7 +40,7 @@ public class GlobalExceptionHandler {
   public ResponseEntity<ApiResponse<Void>> handleUnreadableRequest(
       HttpMessageNotReadableException exception) {
     ErrorCode errorCode =
-        targetsField(exception, "amount")
+        targetsFloatingPointField(exception, "amount")
             ? ErrorCode.INVALID_CHARGE_AMOUNT
             : ErrorCode.INVALID_REQUEST;
     return errorResponse(errorCode);
@@ -62,11 +63,12 @@ public class GlobalExceptionHandler {
         .body(ApiResponse.failure(errorCode.name(), errorCode.message()));
   }
 
-  private boolean targetsField(Throwable exception, String fieldName) {
+  private boolean targetsFloatingPointField(Throwable exception, String fieldName) {
     Throwable current = exception;
     while (current != null) {
-      if (current instanceof JacksonException jacksonException
-          && jacksonException.getPath().stream()
+      if (current instanceof MismatchedInputException mismatchedInputException
+          && mismatchedInputException.getCurrentToken() == JsonToken.VALUE_NUMBER_FLOAT
+          && mismatchedInputException.getPath().stream()
               .anyMatch(reference -> fieldName.equals(reference.getPropertyName()))) {
         return true;
       }
