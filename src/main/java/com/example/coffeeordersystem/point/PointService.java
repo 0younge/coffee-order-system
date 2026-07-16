@@ -43,11 +43,11 @@ class PointService {
 
   @Transactional
   PointChargeResult charge(ChargeCommand command) {
-    Instant now = clock.instant();
     PointAccount account =
         pointAccountRepository
             .findByIdForUpdate(command.userId())
             .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
+    Instant now = clock.instant();
 
     String requestHash = requestHasher.hash(IdempotencyOperation.CHARGE, command.amount());
     IdempotencyClaim claim =
