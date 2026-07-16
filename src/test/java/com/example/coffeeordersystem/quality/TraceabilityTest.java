@@ -53,7 +53,11 @@ class TraceabilityTest {
     assertTrue(
         implementedTestIds.stream().allMatch(traceability::contains),
         "구현된 모든 테스트 ID가 요구사항 추적표에 연결되어야 합니다.");
-    assertTrue(build.contains("inputs.files('README.md', fileTree('docs')"));
+    for (String input :
+        List.of("'README.md'", "'AGENTS.md'", "'CLAUDE.md'", "'.claude/skills/autodev'")) {
+      assertTrue(build.contains(input), input + "은 Gradle test 입력이어야 합니다.");
+    }
+    assertTrue(build.contains("fileTree('docs')"));
   }
 
   private void verifyCompletedScopeStatuses(String traceability) {

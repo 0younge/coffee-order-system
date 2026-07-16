@@ -67,6 +67,8 @@ class BuildConfigurationTest {
     assertTrue(build.contains("id 'com.diffplug.spotless' version '8.8.0'"));
     assertTrue(build.contains("googleJavaFormat('1.24.0')"));
     assertTrue(build.contains("dependsOn tasks.named('spotlessCheck')"));
+    assertTrue(build.contains("'README.md', 'AGENTS.md', 'CLAUDE.md', '.claude/skills/autodev'"));
+    assertTrue(build.contains("fileTree('docs')"));
     assertFalse(build.contains("spotlessApply.finalizedBy"));
   }
 
