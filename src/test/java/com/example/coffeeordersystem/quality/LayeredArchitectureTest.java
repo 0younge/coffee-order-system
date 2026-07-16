@@ -1,5 +1,6 @@
 package com.example.coffeeordersystem.quality;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -150,20 +151,22 @@ class LayeredArchitectureTest {
         orderCommand.contains("private OrderCommand("), "OrderCommand 생성은 검증된 정적 팩터리로 제한해야 합니다.");
     String orderFacade =
         Files.readString(MAIN_SOURCE.resolve("order/application/OrderFacade.java"));
+    String orderFacadeDependencies = normalizeDependencySource(orderFacade);
     assertTrue(orderFacade.contains("@Transactional"), "OrderFacade가 주문 트랜잭션 경계를 소유해야 합니다.");
     assertTrue(
-        orderFacade.contains("menu.application.MenuQueryFacade")
-            && orderFacade.contains("menu.application.MenuSnapshot"),
+        orderFacadeDependencies.contains("menu.application.MenuQueryFacade")
+            && orderFacadeDependencies.contains("menu.application.MenuSnapshot"),
         "Order는 Menu Application Facade와 Snapshot 계약만 사용해야 합니다.");
-    assertFalse(orderFacade.contains("MenuResponse"), "Order는 Menu API 응답 DTO를 사용할 수 없습니다.");
+    assertFalse(
+        orderFacadeDependencies.contains("MenuResponse"), "Order는 Menu API 응답 DTO를 사용할 수 없습니다.");
     assertTrue(
-        orderFacade.contains("point.application.PointPaymentFacade")
-            && orderFacade.contains("point.application.LockedPointBalance"),
+        orderFacadeDependencies.contains("point.application.PointPaymentFacade")
+            && orderFacadeDependencies.contains("point.application.LockedPointBalance"),
         "Order는 Point Application 결제 계약만 사용해야 합니다.");
     assertFalse(
-        orderFacade.contains("point.api.")
-            || orderFacade.contains("point.domain.")
-            || orderFacade.contains("point.infrastructure."),
+        orderFacadeDependencies.contains("point.api.")
+            || orderFacadeDependencies.contains("point.domain.")
+            || orderFacadeDependencies.contains("point.infrastructure."),
         "Order는 Point API, Domain, Infrastructure를 직접 참조할 수 없습니다.");
     assertTrue(
         Files.exists(MAIN_SOURCE.resolve("outbox/application/OutboxEventAppender.java")),
@@ -182,12 +185,12 @@ class LayeredArchitectureTest {
             .anyMatch(name -> name.equals("OutboxEventWriter.java")),
         "기존 OutboxEventWriter를 공개 구현으로 남길 수 없습니다.");
     assertTrue(
-        orderFacade.contains("outbox.application.OutboxEventAppender"),
+        orderFacadeDependencies.contains("outbox.application.OutboxEventAppender"),
         "Order는 Outbox Application 기록 계약만 사용해야 합니다.");
     assertFalse(
-        orderFacade.contains("outbox.api.")
-            || orderFacade.contains("outbox.domain.")
-            || orderFacade.contains("outbox.infrastructure."),
+        orderFacadeDependencies.contains("outbox.api.")
+            || orderFacadeDependencies.contains("outbox.domain.")
+            || orderFacadeDependencies.contains("outbox.infrastructure."),
         "Order는 Outbox API, Domain, Infrastructure를 직접 참조할 수 없습니다.");
     assertTrue(
         Files.exists(MAIN_SOURCE.resolve("outbox/application/OutboxDeliveryFacade.java")),
@@ -288,6 +291,119 @@ class LayeredArchitectureTest {
   }
 
   @Test
+  @DisplayName("QT-ARCH-001 주석과 리터럴의 패키지명은 의존성으로 판정하지 않는다")
+  void ignoresCommentsAndLiteralsWhenCheckingDependencies() {
+    SourceFile comments =
+        syntheticSource(
+            "order/application/CommentOnlyOrder.java",
+            "class CommentOnlyOrder {\n"
+                + "  // com.example.coffeeordersystem.point.domain.PointAccount\n"
+                + "  /* org.springframework.jdbc.core.JdbcTemplate\n"
+                + "     com.example.coffeeordersystem.outbox.infrastructure.OutboxStore */\n"
+                + "}");
+    assertDoesNotThrow(() -> verifyApplicationIndependence(comments));
+    assertDoesNotThrow(() -> verifyCrossFeatureBoundary(comments));
+
+    SourceFile ordinaryLiterals =
+        syntheticSource(
+            "order/application/LiteralOnlyOrder.java",
+            "class LiteralOnlyOrder {\n"
+                + "  String packageName = \"com.example.coffeeordersystem.point.domain.PointAccount\";\n"
+                + "  String technology = \"org.springframework.jdbc.core.JdbcTemplate\";\n"
+                + "  char quote = '\\\"';\n"
+                + "  char slash = '/';\n"
+                + "}");
+    assertDoesNotThrow(() -> verifyApplicationIndependence(ordinaryLiterals));
+    assertDoesNotThrow(() -> verifyCrossFeatureBoundary(ordinaryLiterals));
+
+    SourceFile textBlock =
+        syntheticSource(
+            "point/domain/TextBlockDomain.java",
+            "class TextBlockDomain {\n"
+                + "  String documentation = \"\"\"\n"
+                + "      com.example.coffeeordersystem.order.infrastructure.OrderRepository\n"
+                + "      org.springframework.http.ResponseEntity\n"
+                + "      tools.jackson.databind.ObjectMapper\n"
+                + "      \"\"\";\n"
+                + "}");
+    assertDoesNotThrow(() -> verifyDomainIndependence(textBlock));
+    assertDoesNotThrow(() -> verifyCrossFeatureBoundary(textBlock));
+
+    SourceFile controllerLiteral =
+        syntheticSource(
+            "menu/api/DocumentedController.java",
+            "import com.example.coffeeordersystem.menu.application.MenuQueryFacade;\n"
+                + "@org.springframework.web.bind.annotation.RestController\n"
+                + "class DocumentedController {\n"
+                + "  private final MenuQueryFacade menuQueryFacade;\n"
+                + "  String documentation() {\n"
+                + "    return \"com.example.coffeeordersystem.menu.infrastructure.MenuRepository JdbcTemplate\";\n"
+                + "  }\n"
+                + "}");
+    assertDoesNotThrow(
+        () -> verifyControllerDoesNotUsePersistence(controllerLiteral, Set.of("MenuRepository")));
+    assertDoesNotThrow(() -> verifyControllerUsesOwnFacadeOnly(controllerLiteral));
+    assertDoesNotThrow(() -> verifyApiIndependence(controllerLiteral));
+  }
+
+  @Test
+  @DisplayName("QT-ARCH-001 의존성 소스 정규화는 코드와 원문 줄 경계를 보존한다")
+  void normalizesOnlyCommentsAndLiteralsForDependencyChecks() {
+    String source =
+        "import com.example.coffeeordersystem.menu.application.MenuSnapshot;\n"
+            + "// com.example.coffeeordersystem.point.domain.PointAccount \"\"\"\n"
+            + "/* org.springframework.jdbc.core.JdbcTemplate \"quoted\" */\n"
+            + "class Sample {\n"
+            + "  String ordinary = \"com.example.coffeeordersystem.order.infrastructure.OrderRepository // \\\"quoted\\\"\";\n"
+            + "  char quote = '\\\"';\n"
+            + "  char slash = '/';\n"
+            + "  char backslash = '\\\\';\n"
+            + "  String block = \"\"\"\n"
+            + "      tools.jackson.databind.ObjectMapper\n"
+            + "      com.example.coffeeordersystem.outbox.infrastructure.OutboxStore\n"
+            + "      "
+            + '\\'
+            + "\"\"\" com.example.coffeeordersystem.point.domain.EscapedPoint\n"
+            + "      \"\"\";\n"
+            + "  com.example.coffeeordersystem.menu.application.MenuSnapshot snapshot;\n"
+            + "}\n";
+
+    String normalized = normalizeDependencySource(source);
+
+    assertTrue(
+        normalized.contains("import com.example.coffeeordersystem.menu.application.MenuSnapshot;"));
+    assertTrue(
+        normalized.contains(
+            "com.example.coffeeordersystem.menu.application.MenuSnapshot snapshot;"));
+    for (String removed :
+        List.of(
+            "point.domain.PointAccount",
+            "org.springframework.jdbc",
+            "order.infrastructure.OrderRepository",
+            "tools.jackson",
+            "outbox.infrastructure.OutboxStore",
+            "point.domain.EscapedPoint")) {
+      assertFalse(normalized.contains(removed), "주석·리터럴 내용은 제거해야 합니다: " + removed);
+    }
+    assertFalse(normalized.contains("//"));
+    assertFalse(normalized.contains("/*"));
+    assertFalse(normalized.contains("\""));
+    assertFalse(normalized.contains("'"));
+    assertEquals(
+        source.chars().filter(character -> character == '\n').count(),
+        normalized.chars().filter(character -> character == '\n').count());
+
+    String eligibleUnicodeEscape = "" + '\\' + "uuuu0041";
+    assertEquals("A", translateUnicodeEscapes(eligibleUnicodeEscape));
+    String ineligibleUnicodeEscape = "" + '\\' + '\\' + "u0041";
+    assertEquals(ineligibleUnicodeEscape, translateUnicodeEscapes(ineligibleUnicodeEscape));
+    String thirdBackslashEligible = "" + '\\' + '\\' + '\\' + "u0041";
+    assertEquals("" + '\\' + '\\' + "A", translateUnicodeEscapes(thirdBackslashEligible));
+    String escapedBackslashes = "" + '\\' + "u005c" + '\\' + "u005c";
+    assertEquals("" + '\\' + '\\', translateUnicodeEscapes(escapedBackslashes));
+  }
+
+  @Test
   @DisplayName("QT-ARCH-001 정적 import와 저장소 역할 타입 우회를 탐지한다")
   void detectsStaticImportsAndPersistenceRoleTypes() {
     SourceFile staticImport =
@@ -302,6 +418,22 @@ class LayeredArchitectureTest {
             "class QualifiedOrder { "
                 + "com.example.coffeeordersystem.point.domain.PointAccount account; }");
     assertThrows(AssertionError.class, () -> verifyCrossFeatureBoundary(qualifiedFeatureReference));
+    SourceFile unicodeEscapedLineBreak =
+        syntheticSource(
+            "point/domain/UnicodeEscapedLineBreak.java",
+            "// comment before escaped line break "
+                + '\\'
+                + "u000a class UnicodeEscapedLineBreak { "
+                + "org.springframework.jdbc.core.JdbcTemplate jdbc; }");
+    assertThrows(AssertionError.class, () -> verifyDomainIndependence(unicodeEscapedLineBreak));
+    SourceFile unicodeEscapedBlockCommentEnd =
+        syntheticSource(
+            "order/application/UnicodeEscapedCommentEnd.java",
+            "/* comment ending with escaped slash *"
+                + '\\'
+                + "u002f import com.example.coffeeordersystem.point.domain.PointAccount;");
+    assertThrows(
+        AssertionError.class, () -> verifyCrossFeatureBoundary(unicodeEscapedBlockCommentEnd));
 
     SourceFile qualifiedDomainLeak =
         syntheticSource(
@@ -338,6 +470,11 @@ class LayeredArchitectureTest {
             "menu/api/SyntheticResponse.java",
             "import com.example.coffeeordersystem.menu.domain.Menu;");
     assertThrows(AssertionError.class, () -> verifyApiIndependence(apiDomainLeak));
+    SourceFile apiInfrastructureLeak =
+        syntheticSource(
+            "menu/api/InfrastructureController.java",
+            "import com.example.coffeeordersystem.menu.infrastructure.MenuRepository;");
+    assertThrows(AssertionError.class, () -> verifyApiIndependence(apiInfrastructureLeak));
     SourceFile apiCrossFeatureApplicationLeak =
         syntheticSource(
             "menu/api/CrossFeatureController.java",
@@ -450,6 +587,11 @@ class LayeredArchitectureTest {
     assertThrows(
         AssertionError.class,
         () -> verifyControllerDoesNotUsePersistence(mvcControllerWithJdbc, persistenceTypes));
+    SourceFile domainWithJackson =
+        syntheticSource(
+            "order/domain/JacksonOrder.java",
+            "class JacksonOrder { tools.jackson.databind.ObjectMapper mapper; }");
+    assertThrows(AssertionError.class, () -> verifyDomainIndependence(domainWithJackson));
   }
 
   @Test
@@ -554,21 +696,23 @@ class LayeredArchitectureTest {
 
   private void verifyControllerDoesNotUsePersistence(
       SourceFile source, Set<String> persistenceTypes) {
-    if (!hasAnyAnnotation(source.contents(), "RestController", "Controller")) {
+    String dependencyContents = source.dependencyContents();
+    if (!hasAnyAnnotation(dependencyContents, "RestController", "Controller")) {
       return;
     }
     assertFalse(
-        source.contents().contains("JdbcTemplate"),
+        dependencyContents.contains("JdbcTemplate"),
         source.path() + " Controller는 JdbcTemplate을 직접 참조할 수 없습니다.");
     for (String type : persistenceTypes) {
       assertFalse(
-          Pattern.compile("\\b" + Pattern.quote(type) + "\\b").matcher(source.contents()).find(),
+          Pattern.compile("\\b" + Pattern.quote(type) + "\\b").matcher(dependencyContents).find(),
           source.path() + " Controller는 저장소 역할 타입 " + type + "을 직접 참조할 수 없습니다.");
     }
   }
 
   private void verifyControllerUsesOwnFacadeOnly(SourceFile source) {
-    if (!hasAnyAnnotation(source.contents(), "RestController", "Controller")) {
+    String dependencyContents = source.dependencyContents();
+    if (!hasAnyAnnotation(dependencyContents, "RestController", "Controller")) {
       return;
     }
     String sourceFeature = featureOf(source.path());
@@ -576,7 +720,7 @@ class LayeredArchitectureTest {
     assertTrue(
         normalized(source.path()).contains("/" + sourceFeature + "/api/"),
         source.path() + " Controller는 자기 기능의 API 계층에 있어야 합니다.");
-    List<String> dependencies = controllerInstanceFields(source.contents());
+    List<String> dependencies = controllerInstanceFields(dependencyContents);
     assertEquals(1, dependencies.size(), source.path() + " Controller는 Facade 하나만 주입해야 합니다.");
     assertTrue(
         dependencies.get(0).startsWith("private final "),
@@ -588,26 +732,24 @@ class LayeredArchitectureTest {
     String facadeType = dependency.group(1);
     assertTrue(facadeType.endsWith("Facade"), source.path() + " Controller는 Facade만 호출해야 합니다.");
     assertTrue(
-        source
-            .contents()
-            .contains(
-                "import com.example.coffeeordersystem."
-                    + sourceFeature
-                    + ".application."
-                    + facadeType
-                    + ";"),
+        dependencyContents.contains(
+            "import com.example.coffeeordersystem."
+                + sourceFeature
+                + ".application."
+                + facadeType
+                + ";"),
         source.path() + " Controller는 자기 기능의 Application Facade를 사용해야 합니다.");
     verifyControllerApplicationReferences(source, sourceFeature, facadeType);
     String className = source.path().getFileName().toString().replaceFirst("\\.java$", "");
     assertFalse(
         Pattern.compile(
                 "(?m)^\\s*(?:public|protected|private)?\\s*" + Pattern.quote(className) + "\\s*\\(")
-            .matcher(source.contents())
+            .matcher(dependencyContents)
             .find(),
         source.path() + " Controller는 Lombok 생성자 주입 외 명시 생성자를 둘 수 없습니다.");
     for (String injection : List.of("Autowired", "Inject", "Resource")) {
       assertFalse(
-          hasAnnotation(source.contents(), injection),
+          hasAnnotation(dependencyContents, injection),
           source.path() + " Controller는 setter·method injection을 사용할 수 없습니다: " + injection);
     }
   }
@@ -638,7 +780,7 @@ class LayeredArchitectureTest {
                 "com\\.example\\.coffeeordersystem\\."
                     + Pattern.quote(sourceFeature)
                     + "\\.application\\.([A-Za-z_$][\\w$]*|\\*)")
-            .matcher(source.contents());
+            .matcher(source.dependencyContents());
     while (references.find()) {
       String applicationType = references.group(1);
       assertTrue(
@@ -652,51 +794,54 @@ class LayeredArchitectureTest {
   }
 
   private void verifyMenuControllerFacadeOnly(SourceFile source) {
+    String dependencyContents = source.dependencyContents();
     assertTrue(
-        source.contents().contains("MenuQueryFacade"),
+        dependencyContents.contains("MenuQueryFacade"),
         "MenuController는 MenuQueryFacade를 사용해야 합니다.");
     assertEquals(
         1,
-        source.contents().lines().filter(line -> line.contains("private final ")).count(),
+        dependencyContents.lines().filter(line -> line.contains("private final ")).count(),
         "MenuController의 주입 의존성은 MenuQueryFacade 하나여야 합니다.");
     assertTrue(
-        source.contents().contains("private final MenuQueryFacade menuQueryFacade;"),
+        dependencyContents.contains("private final MenuQueryFacade menuQueryFacade;"),
         "MenuController는 MenuQueryFacade를 생성자 주입해야 합니다.");
     assertFalse(
-        source.contents().contains("com.example.coffeeordersystem.menu.domain.")
-            || source.contents().contains("com.example.coffeeordersystem.menu.infrastructure."),
+        dependencyContents.contains("com.example.coffeeordersystem.menu.domain.")
+            || dependencyContents.contains("com.example.coffeeordersystem.menu.infrastructure."),
         "MenuController는 Menu Domain이나 Infrastructure를 직접 참조할 수 없습니다.");
   }
 
   private void verifyPointControllerFacadeOnly(SourceFile source) {
+    String dependencyContents = source.dependencyContents();
     assertTrue(
-        source.contents().contains("PointFacade"), "PointController는 PointFacade를 사용해야 합니다.");
+        dependencyContents.contains("PointFacade"), "PointController는 PointFacade를 사용해야 합니다.");
     assertEquals(
         1,
-        source.contents().lines().filter(line -> line.contains("private final ")).count(),
+        dependencyContents.lines().filter(line -> line.contains("private final ")).count(),
         "PointController의 주입 의존성은 PointFacade 하나여야 합니다.");
     assertTrue(
-        source.contents().contains("private final PointFacade pointFacade;"),
+        dependencyContents.contains("private final PointFacade pointFacade;"),
         "PointController는 PointFacade를 생성자 주입해야 합니다.");
     assertFalse(
-        source.contents().contains("com.example.coffeeordersystem.point.domain.")
-            || source.contents().contains("com.example.coffeeordersystem.point.infrastructure."),
+        dependencyContents.contains("com.example.coffeeordersystem.point.domain.")
+            || dependencyContents.contains("com.example.coffeeordersystem.point.infrastructure."),
         "PointController는 Point Domain이나 Infrastructure를 직접 참조할 수 없습니다.");
   }
 
   private void verifyOrderControllerFacadeOnly(SourceFile source) {
+    String dependencyContents = source.dependencyContents();
     assertTrue(
-        source.contents().contains("OrderFacade"), "OrderController는 OrderFacade를 사용해야 합니다.");
+        dependencyContents.contains("OrderFacade"), "OrderController는 OrderFacade를 사용해야 합니다.");
     assertEquals(
         1,
-        source.contents().lines().filter(line -> line.contains("private final ")).count(),
+        dependencyContents.lines().filter(line -> line.contains("private final ")).count(),
         "OrderController의 주입 의존성은 OrderFacade 하나여야 합니다.");
     assertTrue(
-        source.contents().contains("private final OrderFacade orderFacade;"),
+        dependencyContents.contains("private final OrderFacade orderFacade;"),
         "OrderController는 OrderFacade를 생성자 주입해야 합니다.");
     assertFalse(
-        source.contents().contains("com.example.coffeeordersystem.order.domain.")
-            || source.contents().contains("com.example.coffeeordersystem.order.infrastructure."),
+        dependencyContents.contains("com.example.coffeeordersystem.order.domain.")
+            || dependencyContents.contains("com.example.coffeeordersystem.order.infrastructure."),
         "OrderController는 Order Domain이나 Infrastructure를 직접 참조할 수 없습니다.");
   }
 
@@ -716,7 +861,7 @@ class LayeredArchitectureTest {
             "tools.jackson",
             "com.fasterxml.jackson")) {
       assertFalse(
-          source.contents().contains(forbidden),
+          source.dependencyContents().contains(forbidden),
           source.path() + " domain은 " + forbidden + "에 의존할 수 없습니다.");
     }
   }
@@ -731,10 +876,10 @@ class LayeredArchitectureTest {
     }
     for (String forbidden : List.of(".domain.", ".infrastructure.")) {
       assertFalse(
-          source.contents().contains(forbidden),
+          source.dependencyContents().contains(forbidden),
           source.path() + " API는 자기 기능의 Application 경계만 사용해야 합니다: " + forbidden);
     }
-    Matcher references = FEATURE_REFERENCE.matcher(source.contents());
+    Matcher references = FEATURE_REFERENCE.matcher(source.dependencyContents());
     while (references.find()) {
       String targetFeature = references.group(1);
       if (FEATURES.contains(targetFeature) && !sourceFeature.equals(targetFeature)) {
@@ -757,7 +902,7 @@ class LayeredArchitectureTest {
             "tools.jackson",
             "com.fasterxml.jackson")) {
       assertFalse(
-          source.contents().contains(forbidden),
+          source.dependencyContents().contains(forbidden),
           source.path() + " application은 API 표현·DB 접근 기술 " + forbidden + "에 의존할 수 없습니다.");
     }
   }
@@ -767,7 +912,7 @@ class LayeredArchitectureTest {
     if (sourceFeature == null) {
       return;
     }
-    Matcher references = FEATURE_REFERENCE.matcher(source.contents());
+    Matcher references = FEATURE_REFERENCE.matcher(source.dependencyContents());
     while (references.find()) {
       String targetFeature = references.group(1);
       String targetLayer = references.group(2);
@@ -783,7 +928,7 @@ class LayeredArchitectureTest {
     if (!normalized(source.path()).contains("/common/")) {
       return;
     }
-    Matcher references = FEATURE_REFERENCE.matcher(source.contents());
+    Matcher references = FEATURE_REFERENCE.matcher(source.dependencyContents());
     while (references.find()) {
       if (FEATURES.contains(references.group(1))) {
         fail(source.path() + " Common은 기능 코드에 의존할 수 없습니다: " + references.group());
@@ -859,7 +1004,7 @@ class LayeredArchitectureTest {
       if (sourceFeature == null) {
         continue;
       }
-      Matcher references = FEATURE_REFERENCE.matcher(source.contents());
+      Matcher references = FEATURE_REFERENCE.matcher(source.dependencyContents());
       while (references.find()) {
         String targetFeature = references.group(1);
         if (FEATURES.contains(targetFeature) && !sourceFeature.equals(targetFeature)) {
@@ -873,10 +1018,11 @@ class LayeredArchitectureTest {
   private Set<String> persistenceTypeNames(List<SourceFile> sources) {
     Set<String> names = new HashSet<>();
     for (SourceFile source : sources) {
-      if (hasAnnotation(source.contents(), "Repository")
-          || source.contents().contains("extends JpaRepository")
-          || source.contents().contains("extends CrudRepository")
-          || source.contents().contains("JdbcTemplate")) {
+      String dependencyContents = source.dependencyContents();
+      if (hasAnnotation(dependencyContents, "Repository")
+          || dependencyContents.contains("extends JpaRepository")
+          || dependencyContents.contains("extends CrudRepository")
+          || dependencyContents.contains("JdbcTemplate")) {
         names.add(source.path().getFileName().toString().replaceFirst("\\.java$", ""));
       }
     }
@@ -934,6 +1080,138 @@ class LayeredArchitectureTest {
     return List.copyOf(sources);
   }
 
+  private static String translateUnicodeEscapes(String source) {
+    StringBuilder translated = new StringBuilder(source.length());
+    int contiguousBackslashes = 0;
+    boolean previousCharacterFromEscape = false;
+    for (int index = 0; index < source.length(); index++) {
+      char current = source.charAt(index);
+      boolean eligibleBackslash =
+          current == '\\' && (previousCharacterFromEscape || contiguousBackslashes % 2 == 0);
+      if (eligibleBackslash && index + 1 < source.length() && source.charAt(index + 1) == 'u') {
+        int hexadecimalStart = index + 1;
+        while (hexadecimalStart < source.length() && source.charAt(hexadecimalStart) == 'u') {
+          hexadecimalStart++;
+        }
+        if (hexadecimalStart + 4 > source.length()) {
+          throw new IllegalArgumentException("완성되지 않은 Java Unicode escape입니다.");
+        }
+        int value = 0;
+        for (int digitIndex = hexadecimalStart; digitIndex < hexadecimalStart + 4; digitIndex++) {
+          int digit = Character.digit(source.charAt(digitIndex), 16);
+          if (digit < 0) {
+            throw new IllegalArgumentException("잘못된 Java Unicode escape입니다.");
+          }
+          value = value * 16 + digit;
+        }
+        char translatedCharacter = (char) value;
+        translated.append(translatedCharacter);
+        contiguousBackslashes = translatedCharacter == '\\' ? contiguousBackslashes + 1 : 0;
+        previousCharacterFromEscape = true;
+        index = hexadecimalStart + 3;
+      } else {
+        translated.append(current);
+        contiguousBackslashes = current == '\\' ? contiguousBackslashes + 1 : 0;
+        previousCharacterFromEscape = false;
+      }
+    }
+    return translated.toString();
+  }
+
+  private static String normalizeDependencySource(String source) {
+    source = translateUnicodeEscapes(source);
+    StringBuilder normalized = new StringBuilder(source.length());
+    DependencySourceState state = DependencySourceState.CODE;
+    for (int index = 0; index < source.length(); index++) {
+      char current = source.charAt(index);
+      char next = index + 1 < source.length() ? source.charAt(index + 1) : '\0';
+      switch (state) {
+        case CODE -> {
+          if (current == '/' && next == '/') {
+            appendMasked(normalized, current);
+            appendMasked(normalized, next);
+            index++;
+            state = DependencySourceState.LINE_COMMENT;
+          } else if (current == '/' && next == '*') {
+            appendMasked(normalized, current);
+            appendMasked(normalized, next);
+            index++;
+            state = DependencySourceState.BLOCK_COMMENT;
+          } else if (current == '"'
+              && next == '"'
+              && index + 2 < source.length()
+              && source.charAt(index + 2) == '"') {
+            appendMasked(normalized, current);
+            appendMasked(normalized, next);
+            appendMasked(normalized, source.charAt(index + 2));
+            index += 2;
+            state = DependencySourceState.TEXT_BLOCK;
+          } else if (current == '"') {
+            appendMasked(normalized, current);
+            state = DependencySourceState.STRING;
+          } else if (current == '\'') {
+            appendMasked(normalized, current);
+            state = DependencySourceState.CHARACTER;
+          } else {
+            normalized.append(current);
+          }
+        }
+        case LINE_COMMENT -> {
+          appendMasked(normalized, current);
+          if (current == '\n' || current == '\r') {
+            state = DependencySourceState.CODE;
+          }
+        }
+        case BLOCK_COMMENT -> {
+          appendMasked(normalized, current);
+          if (current == '*' && next == '/') {
+            appendMasked(normalized, next);
+            index++;
+            state = DependencySourceState.CODE;
+          }
+        }
+        case STRING -> {
+          appendMasked(normalized, current);
+          if (current == '\\' && index + 1 < source.length()) {
+            appendMasked(normalized, next);
+            index++;
+          } else if (current == '"') {
+            state = DependencySourceState.CODE;
+          }
+        }
+        case CHARACTER -> {
+          appendMasked(normalized, current);
+          if (current == '\\' && index + 1 < source.length()) {
+            appendMasked(normalized, next);
+            index++;
+          } else if (current == '\'') {
+            state = DependencySourceState.CODE;
+          }
+        }
+        case TEXT_BLOCK -> {
+          appendMasked(normalized, current);
+          if (current == '\\' && index + 1 < source.length()) {
+            appendMasked(normalized, next);
+            index++;
+          } else if (current == '"'
+              && next == '"'
+              && index + 2 < source.length()
+              && source.charAt(index + 2) == '"') {
+            appendMasked(normalized, next);
+            appendMasked(normalized, source.charAt(index + 2));
+            index += 2;
+            state = DependencySourceState.CODE;
+          }
+        }
+      }
+    }
+    return normalized.toString();
+  }
+
+  private static void appendMasked(StringBuilder normalized, char sourceCharacter) {
+    normalized.append(sourceCharacter == '\n' || sourceCharacter == '\r' ? sourceCharacter : ' ');
+  }
+
   private String normalized(Path path) {
     return "/" + path.toString().replace('\\', '/') + "/";
   }
@@ -962,5 +1240,19 @@ class LayeredArchitectureTest {
     return new SourceFile(MAIN_SOURCE.resolve(relativePath), contents);
   }
 
-  private record SourceFile(Path path, String contents) {}
+  private enum DependencySourceState {
+    CODE,
+    LINE_COMMENT,
+    BLOCK_COMMENT,
+    STRING,
+    CHARACTER,
+    TEXT_BLOCK
+  }
+
+  private record SourceFile(Path path, String contents, String dependencyContents) {
+
+    private SourceFile(Path path, String contents) {
+      this(path, contents, normalizeDependencySource(contents));
+    }
+  }
 }
