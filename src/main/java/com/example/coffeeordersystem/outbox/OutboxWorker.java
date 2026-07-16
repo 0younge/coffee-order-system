@@ -24,6 +24,7 @@ class OutboxWorker {
   private final OutboxStore outboxStore;
   private final OutboxHttpSender httpSender;
   private final Clock clock;
+  private final OutboxMetrics metrics;
   private final int batchSize;
   private final AtomicBoolean active = new AtomicBoolean();
 
@@ -31,6 +32,7 @@ class OutboxWorker {
       OutboxStore outboxStore,
       OutboxHttpSender httpSender,
       Clock clock,
+      OutboxMetrics metrics,
       @Value("${outbox.worker.batch-size:50}") int batchSize) {
     if (batchSize <= 0) {
       throw new IllegalArgumentException("Outbox 배치 크기는 1 이상이어야 합니다.");
@@ -38,6 +40,7 @@ class OutboxWorker {
     this.outboxStore = outboxStore;
     this.httpSender = httpSender;
     this.clock = clock;
+    this.metrics = metrics;
     this.batchSize = batchSize;
   }
 
@@ -76,15 +79,45 @@ class OutboxWorker {
   }
 
   private CompletableFuture<Void> deliver(OutboxClaim claim) {
+    long startedAt = System.nanoTime();
     return httpSender
         .send(claim.payload())
         .thenAccept(
             result -> {
+              String deliveryResult;
               if (result.published()) {
-                outboxStore.publish(claim.eventId(), claim.claimToken(), clock.instant());
+                boolean published =
+                    outboxStore.publish(claim.eventId(), claim.claimToken(), clock.instant());
+                if (published) {
+                  metrics.published();
+                  deliveryResult = "published";
+                } else {
+                  metrics.fencingRejected();
+                  deliveryResult = "fencing_rejected";
+                }
               } else {
-                outboxStore.fail(claim.eventId(), claim.claimToken(), result, clock.instant());
+                boolean failed =
+                    outboxStore.fail(claim.eventId(), claim.claimToken(), result, clock.instant());
+                if (!failed) {
+                  metrics.fencingRejected();
+                  deliveryResult = "fencing_rejected";
+                } else if (result.retryable() && claim.attempt() < 4) {
+                  metrics.retried();
+                  deliveryResult = "retry_scheduled";
+                } else {
+                  metrics.failed();
+                  deliveryResult = "failed";
+                }
               }
+              long latencyMillis =
+                  java.time.Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
+              log.atInfo()
+                  .addKeyValue("eventId", claim.eventId())
+                  .addKeyValue("attempt", claim.attempt())
+                  .addKeyValue("target", "/events/orders")
+                  .addKeyValue("latencyMs", latencyMillis)
+                  .addKeyValue("result", deliveryResult)
+                  .log("Outbox 이벤트 전달 완료");
             });
   }
 }

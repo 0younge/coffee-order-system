@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
@@ -42,6 +43,8 @@ class PointResilienceApiTest {
 
   @Autowired private PlatformTransactionManager transactionManager;
 
+  @Autowired private MeterRegistry meterRegistry;
+
   private long userId;
 
   @BeforeEach
@@ -64,6 +67,7 @@ class PointResilienceApiTest {
   @Test
   @DisplayName("IT-RESILIENCE-001 사용자 행 락 타임아웃은 503이며 상태를 변경하지 않는다")
   void doesNotChangeStateOnLockTimeout() throws Exception {
+    double metricBefore = meterRegistry.get("coffee.db.lock.timeout").counter().count();
     CountDownLatch locked = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
     TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
@@ -102,6 +106,7 @@ class PointResilienceApiTest {
 
     assertEquals(100L, balance());
     assertEquals(0L, idempotencyCount());
+    assertEquals(metricBefore + 1, meterRegistry.get("coffee.db.lock.timeout").counter().count());
   }
 
   private void await(CountDownLatch latch) {

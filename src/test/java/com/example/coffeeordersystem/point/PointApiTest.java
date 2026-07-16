@@ -72,7 +72,7 @@ class PointApiTest {
   }
 
   @Test
-  @DisplayName("AT-USER-001 존재하지 않는 사용자는 멱등 레코드 없이 거절한다")
+  @DisplayName("AT-USER-001 AT-CONTRACT-003 존재하지 않는 사용자를 먼저 거절한다")
   void rejectsMissingUserBeforeIdempotencyClaim() throws Exception {
     long missingUserId = userId + 100_000L;
 
@@ -91,7 +91,7 @@ class PointApiTest {
   }
 
   @Test
-  @DisplayName("AT-POINT-002 잘못된 헤더·JSON·필드·금액을 상태 변경 없이 거절한다")
+  @DisplayName("AT-POINT-002 AT-CONTRACT-001 형식 오류를 상태 변경 없이 먼저 거절한다")
   void rejectsInvalidRequestsBeforeStateChange() throws Exception {
     String validBody = "{\"userId\":" + userId + ",\"amount\":100}";
 
@@ -199,7 +199,7 @@ class PointApiTest {
   }
 
   @Test
-  @DisplayName("IT-IDEM-002 AT-POINT-004 같은 키의 다른 금액은 추가 충전 없이 거절한다")
+  @DisplayName("IT-IDEM-002 AT-POINT-004 AT-CONTRACT-003 멱등 충돌을 먼저 판정한다")
   void rejectsDifferentRequestWithSameKey() throws Exception {
     String key = UUID.randomUUID().toString();
 

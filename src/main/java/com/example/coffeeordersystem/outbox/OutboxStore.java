@@ -86,20 +86,22 @@ class OutboxStore {
 
   private Optional<OutboxClaim> lockAndClaim(
       String eventId, Timestamp dueAt, Timestamp leaseCutoff, Instant now) {
-    Optional<String> payload =
+    Optional<LockedEvent> lockedEvent =
         jdbcTemplate
             .query(
-                "SELECT payload FROM outbox_events WHERE event_id = ? "
+                "SELECT payload, retry_count FROM outbox_events WHERE event_id = ? "
                     + "AND ((status = 'PENDING' AND next_retry_at <= ?) "
                     + "OR (status = 'PROCESSING' AND locked_at <= ?)) "
                     + "FOR UPDATE SKIP LOCKED",
-                (resultSet, rowNumber) -> resultSet.getString("payload"),
+                (resultSet, rowNumber) ->
+                    new LockedEvent(
+                        resultSet.getString("payload"), resultSet.getInt("retry_count")),
                 eventId,
                 dueAt,
                 leaseCutoff)
             .stream()
             .findFirst();
-    if (payload.isEmpty()) {
+    if (lockedEvent.isEmpty()) {
       return Optional.empty();
     }
 
@@ -114,7 +116,8 @@ class OutboxStore {
     if (updated != 1) {
       throw new IllegalStateException("Outbox 이벤트를 선점할 수 없습니다.");
     }
-    return Optional.of(new OutboxClaim(eventId, claimToken, payload.orElseThrow()));
+    LockedEvent event = lockedEvent.orElseThrow();
+    return Optional.of(new OutboxClaim(eventId, claimToken, event.payload(), event.retryCount()));
   }
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -202,4 +205,6 @@ class OutboxStore {
   }
 
   private record Candidate(String eventId, Timestamp nextRetryAt, Timestamp createdAt) {}
+
+  private record LockedEvent(String payload, int retryCount) {}
 }

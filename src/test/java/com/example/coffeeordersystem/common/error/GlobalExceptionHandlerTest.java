@@ -5,13 +5,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.example.coffeeordersystem.common.api.ApiResponse;
+import com.example.coffeeordersystem.common.observability.DatabaseContentionMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
 class GlobalExceptionHandlerTest {
 
-  private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
+  private final GlobalExceptionHandler handler =
+      new GlobalExceptionHandler(new DatabaseContentionMetrics(new SimpleMeterRegistry()));
 
   @Test
   @DisplayName("UT-API-001 공개 오류 코드와 HTTP 상태를 일관되게 매핑한다")

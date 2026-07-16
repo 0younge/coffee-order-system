@@ -61,7 +61,7 @@ class OrderApiTest {
   }
 
   @Test
-  @DisplayName("IT-ORDER-001 AT-ORDER-001 주문 성공 상태를 한 트랜잭션에 저장한다")
+  @DisplayName("IT-ORDER-001 AT-ORDER-001 AT-CONTRACT-002 주문 성공과 UTC 시각을 저장한다")
   void placesPaidOrderWithSnapshotAndOutbox() throws Exception {
     MvcResult response =
         mockMvc
@@ -168,7 +168,7 @@ class OrderApiTest {
   }
 
   @Test
-  @DisplayName("AT-USER-001 존재하지 않는 사용자는 어떤 상태도 남기지 않는다")
+  @DisplayName("AT-USER-001 AT-CONTRACT-003 사용자 부재를 다른 오류보다 먼저 판정한다")
   void rejectsMissingUserWithoutIdempotency() throws Exception {
     long missingUserId = userId + 100_000L;
     long missingMenuId = menuId + 100_000L;
@@ -188,7 +188,7 @@ class OrderApiTest {
   }
 
   @Test
-  @DisplayName("AT-ORDER-002 잘못된 요청과 메뉴 부재를 상태 계약대로 거절한다")
+  @DisplayName("AT-ORDER-002 AT-CONTRACT-001 AT-CONTRACT-003 입력과 메뉴 오류를 판정한다")
   void rejectsInvalidRequestAndStoresMissingMenuResult() throws Exception {
     String validBody = body(menuId);
     mockMvc
@@ -258,7 +258,7 @@ class OrderApiTest {
   }
 
   @Test
-  @DisplayName("IT-ORDER-002 AT-ORDER-003 잔액 부족 결과만 멱등 저장한다")
+  @DisplayName("IT-ORDER-002 AT-ORDER-003 AT-CONTRACT-003 메뉴 다음 잔액을 판정한다")
   void storesInsufficientPointResultWithoutBusinessState() throws Exception {
     jdbcTemplate.update("UPDATE users SET point_balance = 3999 WHERE id = ?", userId);
     String key = UUID.randomUUID().toString();
@@ -306,7 +306,7 @@ class OrderApiTest {
   }
 
   @Test
-  @DisplayName("IT-IDEM-002 AT-ORDER-005 같은 키의 다른 메뉴는 추가 결제 없이 거절한다")
+  @DisplayName("IT-IDEM-002 AT-ORDER-005 AT-CONTRACT-003 멱등 충돌을 메뉴보다 먼저 판정한다")
   void rejectsDifferentMenuWithSameKey() throws Exception {
     long missingMenuId = menuId + 10_000L;
     String key = UUID.randomUUID().toString();

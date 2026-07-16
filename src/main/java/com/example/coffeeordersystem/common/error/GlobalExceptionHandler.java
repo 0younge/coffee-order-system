@@ -1,6 +1,8 @@
 package com.example.coffeeordersystem.common.error;
 
 import com.example.coffeeordersystem.common.api.ApiResponse;
+import com.example.coffeeordersystem.common.observability.DatabaseContentionMetrics;
+import com.example.coffeeordersystem.common.observability.RequestCorrelation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import tools.jackson.core.JsonToken;
 import tools.jackson.databind.exc.MismatchedInputException;
 import tools.jackson.databind.exc.UnrecognizedPropertyException;
@@ -20,6 +23,12 @@ import tools.jackson.databind.exc.UnrecognizedPropertyException;
 public class GlobalExceptionHandler {
 
   private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+  private final DatabaseContentionMetrics contentionMetrics;
+
+  public GlobalExceptionHandler(DatabaseContentionMetrics contentionMetrics) {
+    this.contentionMetrics = contentionMetrics;
+  }
 
   @ExceptionHandler(ApiException.class)
   public ResponseEntity<ApiResponse<Void>> handleApiException(ApiException exception) {
@@ -49,13 +58,26 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler({PessimisticLockingFailureException.class, QueryTimeoutException.class})
   public ResponseEntity<ApiResponse<Void>> handleDatabaseContention(Exception exception) {
-    log.warn("DB 경합으로 요청 롤백 errorType={}", exception.getClass().getSimpleName());
+    String contentionType = contentionMetrics.record(exception);
+    log.atWarn()
+        .addKeyValue("requestId", RequestCorrelation.requestId())
+        .addKeyValue("contentionType", contentionType)
+        .addKeyValue("errorType", exception.getClass().getSimpleName())
+        .log("DB 경합으로 요청 롤백");
     return errorResponse(ErrorCode.TEMPORARILY_UNAVAILABLE);
+  }
+
+  @ExceptionHandler(NoResourceFoundException.class)
+  public ResponseEntity<Void> handleNoResourceFound(NoResourceFoundException exception) {
+    return ResponseEntity.notFound().build();
   }
 
   @ExceptionHandler(Exception.class)
   public ResponseEntity<ApiResponse<Void>> handleUnexpectedException(Exception exception) {
-    log.error("예상하지 못한 API 오류 errorType={}", exception.getClass().getSimpleName());
+    log.atError()
+        .addKeyValue("requestId", RequestCorrelation.requestId())
+        .addKeyValue("errorType", exception.getClass().getSimpleName())
+        .log("예상하지 못한 API 오류");
     return errorResponse(ErrorCode.INTERNAL_SERVER_ERROR);
   }
 

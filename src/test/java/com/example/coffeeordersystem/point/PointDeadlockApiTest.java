@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.coffeeordersystem.idempotency.IdempotencyService;
 import com.example.coffeeordersystem.idempotency.RequestHasher;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
@@ -50,6 +51,8 @@ class PointDeadlockApiTest {
 
   @Autowired private PlatformTransactionManager transactionManager;
 
+  @Autowired private MeterRegistry meterRegistry;
+
   @MockitoSpyBean private IdempotencyService idempotencyService;
 
   private long userId;
@@ -78,6 +81,7 @@ class PointDeadlockApiTest {
   @Test
   @DisplayName("IT-RESILIENCE-001 deadlock 희생 요청은 503이며 업무·멱등 상태를 롤백한다")
   void rollsBackChargeAndIdempotencyOnDeadlock() throws Exception {
+    double metricBefore = meterRegistry.get("coffee.db.deadlock").counter().count();
     String idempotencyKey = UUID.randomUUID().toString();
     insertProcessingIdempotency(idempotencyKey);
 
@@ -157,6 +161,7 @@ class PointDeadlockApiTest {
 
     assertEquals(0L, balance());
     assertEquals(0L, idempotencyCount());
+    assertEquals(metricBefore + 1, meterRegistry.get("coffee.db.deadlock").counter().count());
   }
 
   private void insertUser(long targetUserId) {

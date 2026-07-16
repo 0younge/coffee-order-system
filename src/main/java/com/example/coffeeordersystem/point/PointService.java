@@ -3,6 +3,7 @@ package com.example.coffeeordersystem.point;
 import com.example.coffeeordersystem.common.api.ApiResponse;
 import com.example.coffeeordersystem.common.error.ApiException;
 import com.example.coffeeordersystem.common.error.ErrorCode;
+import com.example.coffeeordersystem.common.observability.BusinessEventLogger;
 import com.example.coffeeordersystem.idempotency.IdempotencyClaim;
 import com.example.coffeeordersystem.idempotency.IdempotencyOperation;
 import com.example.coffeeordersystem.idempotency.IdempotencyService;
@@ -23,18 +24,21 @@ class PointService {
   private final RequestHasher requestHasher;
   private final ObjectMapper objectMapper;
   private final Clock clock;
+  private final BusinessEventLogger businessEventLogger;
 
   PointService(
       PointAccountRepository pointAccountRepository,
       IdempotencyService idempotencyService,
       RequestHasher requestHasher,
       ObjectMapper objectMapper,
-      Clock clock) {
+      Clock clock,
+      BusinessEventLogger businessEventLogger) {
     this.pointAccountRepository = pointAccountRepository;
     this.idempotencyService = idempotencyService;
     this.requestHasher = requestHasher;
     this.objectMapper = objectMapper;
     this.clock = clock;
+    this.businessEventLogger = businessEventLogger;
   }
 
   @Transactional
@@ -65,6 +69,7 @@ class PointService {
     } catch (ArithmeticException exception) {
       PointChargeResult result = failure(ErrorCode.POINT_BALANCE_OVERFLOW);
       complete(claim, result, ErrorCode.POINT_BALANCE_OVERFLOW.name(), now);
+      businessEventLogger.pointResult(command.userId(), ErrorCode.POINT_BALANCE_OVERFLOW.name());
       return result;
     }
 
@@ -74,6 +79,7 @@ class PointService {
             "포인트를 충전했습니다.",
             new PointChargeResponse(command.amount(), account.pointBalance()));
     complete(claim, result, "POINT_CHARGED", now);
+    businessEventLogger.pointResult(command.userId(), "POINT_CHARGED");
     return result;
   }
 

@@ -2,6 +2,7 @@ package com.example.coffeeordersystem.order;
 
 import com.example.coffeeordersystem.common.api.ApiResponse;
 import com.example.coffeeordersystem.common.error.ErrorCode;
+import com.example.coffeeordersystem.common.observability.BusinessEventLogger;
 import com.example.coffeeordersystem.idempotency.IdempotencyClaim;
 import com.example.coffeeordersystem.idempotency.IdempotencyOperation;
 import com.example.coffeeordersystem.idempotency.IdempotencyService;
@@ -30,6 +31,7 @@ class OrderService {
   private final OutboxEventWriter outboxEventWriter;
   private final ObjectMapper objectMapper;
   private final Clock clock;
+  private final BusinessEventLogger businessEventLogger;
 
   OrderService(
       PointPaymentService pointPaymentService,
@@ -39,7 +41,8 @@ class OrderService {
       OrderRepository orderRepository,
       OutboxEventWriter outboxEventWriter,
       ObjectMapper objectMapper,
-      Clock clock) {
+      Clock clock,
+      BusinessEventLogger businessEventLogger) {
     this.pointPaymentService = pointPaymentService;
     this.idempotencyService = idempotencyService;
     this.requestHasher = requestHasher;
@@ -48,6 +51,7 @@ class OrderService {
     this.outboxEventWriter = outboxEventWriter;
     this.objectMapper = objectMapper;
     this.clock = clock;
+    this.businessEventLogger = businessEventLogger;
   }
 
   @Transactional
@@ -81,13 +85,15 @@ class OrderService {
     Order order =
         orderRepository.save(
             Order.paid(command.userId(), menu.menuId(), menu.name(), menu.price(), now));
-    outboxEventWriter.appendOrderPaid(
-        order.id(), command.userId(), menu.menuId(), menu.price(), now);
+    String eventId =
+        outboxEventWriter.appendOrderPaid(
+            order.id(), command.userId(), menu.menuId(), menu.price(), now);
     OrderResult result =
         success(
             new OrderResponse(
                 order.id(), menu.menuId(), menu.name(), menu.price(), pointBalance.balance(), now));
     complete(claim, result, "ORDER_PAID", now);
+    businessEventLogger.orderPaid(command.userId(), order.id(), eventId);
     return result;
   }
 

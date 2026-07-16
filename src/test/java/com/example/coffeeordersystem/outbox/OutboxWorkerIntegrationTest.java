@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -60,6 +61,10 @@ class OutboxWorkerIntegrationTest {
 
   @Autowired private ObjectMapper objectMapper;
 
+  @Autowired private MeterRegistry meterRegistry;
+
+  @Autowired private OutboxStore outboxStore;
+
   private long userId;
   private long menuId;
 
@@ -109,6 +114,7 @@ class OutboxWorkerIntegrationTest {
   @Test
   @DisplayName("EXT-OUTBOX-001 EXT-OUTBOX-002 EXT-OUTBOX-008 주문과 분리해 2초 안에 전송한다")
   void sendsCommittedOrderWithoutWaitingForExternalResponse() throws Exception {
+    double publishedBefore = counter("coffee.outbox.delivery.published");
     MOCK_API.reset(1, List.of(204), true, true);
     long startedAt = System.nanoTime();
 
@@ -146,6 +152,7 @@ class OutboxWorkerIntegrationTest {
 
     MOCK_API.release();
     await(() -> "PUBLISHED".equals(statusOf(eventId)), Duration.ofSeconds(2));
+    assertEquals(publishedBefore + 1, counter("coffee.outbox.delivery.published"));
   }
 
   @Test
@@ -200,6 +207,8 @@ class OutboxWorkerIntegrationTest {
   @Test
   @DisplayName("EXT-OUTBOX-003 EXT-OUTBOX-006 EXT-OUTBOX-009 같은 eventId 재시도 후 성공한다")
   void retriesSameEventAndClearsFailureFieldsAfterSuccess() throws Exception {
+    double retriedBefore = counter("coffee.outbox.delivery.retried");
+    double publishedBefore = counter("coffee.outbox.delivery.published");
     MOCK_API.reset(1, List.of(503), false, true);
     String eventId = insertEventsInOneTransaction(1).get(0);
 
@@ -220,6 +229,8 @@ class OutboxWorkerIntegrationTest {
     assertTrue(
         MOCK_API.requests().stream().allMatch(request -> eventId.equals(eventId(request.body()))));
     assertEquals(1, retryCount(eventId));
+    assertEquals(retriedBefore + 1, counter("coffee.outbox.delivery.retried"));
+    assertEquals(publishedBefore + 1, counter("coffee.outbox.delivery.published"));
     assertEquals(
         1L,
         count(
@@ -228,6 +239,41 @@ class OutboxWorkerIntegrationTest {
                 + "' AND status = 'PUBLISHED' AND next_retry_at IS NULL "
                 + "AND locked_at IS NULL AND claim_token IS NULL AND published_at IS NOT NULL "
                 + "AND failed_at IS NULL AND last_http_status IS NULL AND last_error_type IS NULL"));
+  }
+
+  @Test
+  @DisplayName("QT-OBS-002 EXT-OUTBOX-004 영구 실패 counter를 증가시킨다")
+  void recordsPermanentFailureMetric() throws Exception {
+    double failedBefore = counter("coffee.outbox.delivery.failed");
+    MOCK_API.reset(1, List.of(422), false, true);
+    String eventId = insertEventsInOneTransaction(1).get(0);
+
+    assertTrue(MOCK_API.awaitRequests(Duration.ofSeconds(2)));
+    await(() -> "FAILED".equals(statusOf(eventId)), Duration.ofSeconds(2));
+
+    assertEquals(failedBefore + 1, counter("coffee.outbox.delivery.failed"));
+  }
+
+  @Test
+  @DisplayName("QT-OBS-002 EXT-OUTBOX-007 stale claim의 fencing counter를 증가시킨다")
+  void recordsFencingRejectionMetric() throws Exception {
+    double rejectedBefore = counter("coffee.outbox.fencing.rejected");
+    MOCK_API.reset(1, List.of(204), true, true);
+    String eventId = insertEventsInOneTransaction(1).get(0);
+    assertTrue(MOCK_API.awaitRequests(Duration.ofSeconds(2)));
+    jdbcTemplate.update(
+        "UPDATE outbox_events SET locked_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 31 SECOND) "
+            + "WHERE event_id = ?",
+        eventId);
+    OutboxClaim currentClaim = outboxStore.claim(Instant.now(), 1).get(0);
+
+    MOCK_API.release();
+    await(
+        () -> counter("coffee.outbox.fencing.rejected") == rejectedBefore + 1,
+        Duration.ofSeconds(2));
+
+    assertEquals("PROCESSING", statusOf(eventId));
+    assertTrue(outboxStore.publish(eventId, currentClaim.claimToken(), Instant.now()));
   }
 
   private List<String> insertEventsInOneTransaction(int count) {
@@ -321,6 +367,10 @@ class OutboxWorkerIntegrationTest {
   private long count(String sql) {
     Long value = jdbcTemplate.queryForObject(sql, Long.class);
     return value == null ? 0 : value;
+  }
+
+  private double counter(String name) {
+    return meterRegistry.get(name).counter().count();
   }
 
   private record MockRequest(

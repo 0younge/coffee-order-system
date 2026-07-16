@@ -25,6 +25,10 @@ spring:
     properties:
       hibernate.jdbc.time_zone: UTC
 
+logging:
+  pattern:
+    level: "%5p %kvp"
+
 management:
   endpoint:
     health:
