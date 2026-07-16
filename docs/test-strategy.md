@@ -204,8 +204,8 @@ Mock 서버는 테스트마다 수신 기록과 응답 스크립트를 초기화
 | `QT-CONFIG-001` | 외부 주소·워커 활성화 설정 | 활성화 값은 `true`·`false`만 허용; 워커 활성 시 `COLLECTION_API_BASE_URL`은 기본값 없이 검증하고 base path를 보존하며 명시 포트 `1~65535` 밖의 값·누락·오류 시 시작 실패 |
 | `QT-CONFIG-002` | 기술 기준선 | Java 17, Spring Boot 4.1.0, Gradle 9.5.1, MySQL 8.4 구성이 문서·빌드·Compose에서 일치 |
 | `QT-DEPS-001` | 승인 의존성 범위 | 새 애플리케이션 의존성이 승인된 Validation·Actuator·Flyway·Lombok에 한정되고 Lombok은 `compileOnly`·`annotationProcessor`에만 있으며 사용하지 않는 인증 의존성이 없고 빌드 도구는 승인된 Spotless·Java 포매터만 추가됨 |
-| `QT-ARCH-001` | 예약: 기능 우선 계층 구조 | Controller는 Facade만 호출하고 Repository를 직접 참조하지 않으며, domain 기술 독립, 기능 간 Application-only 의존과 순환 부재, OrderService·PointService 중복 위임 계층 부재 |
-| `QT-LOMBOK-001` | 예약: 제한된 Lombok 사용 | Spring 컴포넌트의 final 생성자 주입과 로거 보일러플레이트가 annotation으로 생성되고 Entity에 `@Data`·클래스 전체 `@Setter`·공개 `@AllArgsConstructor`·무분별한 생성 annotation이 없음 |
+| `QT-ARCH-001` | 기능 우선 계층 구조 | 현재 지킬 수 있는 Controller→Repository 금지, domain 기술 독립, 다른 기능의 api·domain·infrastructure 직접 참조 금지와 기능 순환 부재를 먼저 검사하고, 기능 이동과 함께 Controller→Facade·Application-only 의존·중복 Service 부재까지 확장 |
+| `QT-LOMBOK-001` | 제한된 Lombok 사용 | Spring 컴포넌트의 final 생성자 주입과 로거 보일러플레이트가 annotation으로 생성되고 Entity에 `@Data`·클래스 전체 `@Setter`·공개 `@AllArgsConstructor`·무분별한 생성 annotation이 없으며 Lombok Gradle scope가 제한됨 |
 | `QT-FORMAT-001` | Spotless 완료 게이트 | `spotlessCheck`가 `check`에 포함되고 포맷 불일치에서 실패하며 검사·빌드는 소스를 자동 수정하지 않음 |
 | `QT-CONFIG-003` | 테스트 DB·워커 프로필 | 멱등 초기화 스크립트로 신규·기존 볼륨의 테스트 DB를 안전하게 준비하고, 일반 테스트는 테스트 DB만 사용하며 Outbox 전용 테스트만 Mock 서버와 함께 워커를 켬 |
 | `QT-CONFIG-004` | Outbox 폴링 간격 | 승인된 최초 요청 계약을 지키도록 `OUTBOX_POLL_INTERVAL_MS`를 `1~1000ms`로 제한하고 범위 밖이면 시작 실패 |
