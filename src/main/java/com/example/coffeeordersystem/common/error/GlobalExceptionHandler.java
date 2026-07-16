@@ -12,6 +12,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import tools.jackson.core.JacksonException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -29,13 +30,19 @@ public class GlobalExceptionHandler {
     return errorResponse(ErrorCode.UNSUPPORTED_MEDIA_TYPE);
   }
 
-  @ExceptionHandler({
-    MethodArgumentNotValidException.class,
-    HttpMessageNotReadableException.class,
-    MissingRequestHeaderException.class
-  })
+  @ExceptionHandler({MethodArgumentNotValidException.class, MissingRequestHeaderException.class})
   public ResponseEntity<ApiResponse<Void>> handleInvalidRequest(Exception exception) {
     return errorResponse(ErrorCode.INVALID_REQUEST);
+  }
+
+  @ExceptionHandler(HttpMessageNotReadableException.class)
+  public ResponseEntity<ApiResponse<Void>> handleUnreadableRequest(
+      HttpMessageNotReadableException exception) {
+    ErrorCode errorCode =
+        targetsField(exception, "amount")
+            ? ErrorCode.INVALID_CHARGE_AMOUNT
+            : ErrorCode.INVALID_REQUEST;
+    return errorResponse(errorCode);
   }
 
   @ExceptionHandler({PessimisticLockingFailureException.class, QueryTimeoutException.class})
@@ -53,5 +60,21 @@ public class GlobalExceptionHandler {
   private ResponseEntity<ApiResponse<Void>> errorResponse(ErrorCode errorCode) {
     return ResponseEntity.status(errorCode.httpStatus())
         .body(ApiResponse.failure(errorCode.name(), errorCode.message()));
+  }
+
+  private boolean targetsField(Throwable exception, String fieldName) {
+    Throwable current = exception;
+    while (current != null) {
+      if (current instanceof JacksonException jacksonException
+          && jacksonException.getPath().stream()
+              .anyMatch(reference -> fieldName.equals(reference.getPropertyName()))) {
+        return true;
+      }
+      if (current == current.getCause()) {
+        return false;
+      }
+      current = current.getCause();
+    }
+    return false;
   }
 }

@@ -103,14 +103,19 @@ class PointApiTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     expectError("not-a-uuid", validBody, 400, "INVALID_REQUEST");
+    expectError(
+        UUID.randomUUID().toString(),
+        "{\"userId\":" + userId + ",\"amount\":",
+        400,
+        "INVALID_REQUEST");
     expectError(UUID.randomUUID().toString(), body("0"), 400, "INVALID_CHARGE_AMOUNT");
     expectError(UUID.randomUUID().toString(), body("-1"), 400, "INVALID_CHARGE_AMOUNT");
-    expectError(UUID.randomUUID().toString(), body("1.0"), 400, "INVALID_REQUEST");
-    expectError(UUID.randomUUID().toString(), body("1.5"), 400, "INVALID_REQUEST");
-    expectError(UUID.randomUUID().toString(), body("1e2"), 400, "INVALID_REQUEST");
+    expectError(UUID.randomUUID().toString(), body("1.0"), 400, "INVALID_CHARGE_AMOUNT");
+    expectError(UUID.randomUUID().toString(), body("1.5"), 400, "INVALID_CHARGE_AMOUNT");
+    expectError(UUID.randomUUID().toString(), body("1e2"), 400, "INVALID_CHARGE_AMOUNT");
     expectError(
         UUID.randomUUID().toString(), body("9223372036854775808"), 400, "INVALID_CHARGE_AMOUNT");
-    expectError(UUID.randomUUID().toString(), body("\"100\""), 400, "INVALID_REQUEST");
+    expectError(UUID.randomUUID().toString(), body("\"100\""), 400, "INVALID_CHARGE_AMOUNT");
     expectError(
         UUID.randomUUID().toString(),
         "{\"userId\":" + userId + ",\"amount\":100,\"unknown\":true}",
