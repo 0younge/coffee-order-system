@@ -118,11 +118,15 @@ class MultiInstanceApiTest {
     String sharedKey = UUID.randomUUID().toString();
     List<HttpResponse<String>> concurrentResponses =
         chargeConcurrently(firstPort, secondPort, sharedKey);
-    for (HttpResponse<String> response : concurrentResponses) {
-      assertEquals(200, response.statusCode());
-      assertEquals(
-          1_100L, objectMapper.readTree(response.body()).get("data").get("balance").longValue());
-    }
+    assertTrue(concurrentResponses.stream().allMatch(response -> response.statusCode() == 200));
+    JsonNode firstResult = objectMapper.readTree(concurrentResponses.get(0).body());
+    JsonNode secondResult = objectMapper.readTree(concurrentResponses.get(1).body());
+    assertEquals(firstResult, secondResult);
+    assertTrue(firstResult.get("success").booleanValue());
+    assertEquals("POINT_CHARGED", firstResult.get("code").stringValue());
+    assertEquals("포인트를 충전했습니다.", firstResult.get("message").stringValue());
+    assertEquals(100L, firstResult.get("data").get("chargedAmount").longValue());
+    assertEquals(1_100L, firstResult.get("data").get("balance").longValue());
 
     assertEquals(1_100L, balance(firstJdbcTemplate));
     assertEquals(1_100L, balance(secondJdbcTemplate));

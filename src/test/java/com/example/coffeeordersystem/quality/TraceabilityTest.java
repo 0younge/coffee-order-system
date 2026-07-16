@@ -31,7 +31,8 @@ class TraceabilityTest {
     String testStrategy = Files.readString(Path.of("docs/test-strategy.md"));
     String traceability = Files.readString(Path.of("docs/requirements-traceability.md"));
 
-    verifyReadmeLinks(readme);
+    verifyLocalLinks(Path.of("README.md"), readme);
+    verifyLocalLinks(Path.of("docs/requirements-traceability.md"), traceability);
     assertEquals(requirementHeadings(prd), requirementRows(traceability));
     assertEquals(adrFiles(), adrLinks(traceability));
 
@@ -50,23 +51,24 @@ class TraceabilityTest {
         "구현된 모든 테스트 ID가 요구사항 추적표에 연결되어야 합니다.");
   }
 
-  private void verifyReadmeLinks(String readme) throws IOException {
-    Matcher matcher = MARKDOWN_LINK.matcher(readme);
+  private void verifyLocalLinks(Path document, String contents) throws IOException {
+    Matcher matcher = MARKDOWN_LINK.matcher(contents);
     while (matcher.find()) {
       String destination = matcher.group(1);
       if (destination.startsWith("http://") || destination.startsWith("https://")) {
         continue;
       }
       String[] parts = destination.split("#", 2);
-      Path target = Path.of(parts[0]).normalize();
-      assertTrue(Files.exists(target), "README 링크 대상이 없습니다: " + destination);
+      Path parent = document.getParent() == null ? Path.of("") : document.getParent();
+      Path target = parts[0].isEmpty() ? document : parent.resolve(parts[0]).normalize();
+      assertTrue(Files.exists(target), document + " 링크 대상이 없습니다: " + destination);
       if (parts.length == 2 && Files.isRegularFile(target)) {
         Set<String> anchors =
             Files.readAllLines(target).stream()
                 .filter(line -> line.startsWith("#"))
                 .map(this::headingAnchor)
                 .collect(Collectors.toSet());
-        assertTrue(anchors.contains(parts[1]), "README 앵커가 없습니다: " + destination);
+        assertTrue(anchors.contains(parts[1]), document + " 앵커가 없습니다: " + destination);
       }
     }
   }
@@ -77,7 +79,7 @@ class TraceabilityTest {
         .toLowerCase()
         .replaceAll("[^\\p{L}\\p{N} _-]", "")
         .trim()
-        .replaceAll("[ _]+", "-");
+        .replaceAll(" +", "-");
   }
 
   private Set<String> implementedTestIds() throws IOException {
