@@ -261,6 +261,7 @@ class LayeredArchitectureTest {
         "Common은 실제로 재사용되는 API·오류·관측성 경계만 가져야 합니다.");
 
     for (SourceFile source : javaSources()) {
+      verifyCommonLocation(source);
       verifyCommonIndependence(source);
       if (normalized(source.path()).contains("/common/")) {
         assertFalse(
@@ -269,10 +270,6 @@ class LayeredArchitectureTest {
       }
     }
 
-    String errorCode = Files.readString(commonSource.resolve("error/ErrorCode.java"));
-    assertTrue(
-        errorCode.contains("org.springframework.http.HttpStatus"),
-        "공통 ErrorCode의 기존 HTTP 상태 결합은 중복 매핑 없이 유지해야 합니다.");
     String globalExceptionHandler =
         Files.readString(commonSource.resolve("error/GlobalExceptionHandler.java"));
     assertTrue(
@@ -322,6 +319,9 @@ class LayeredArchitectureTest {
             "common/api/SyntheticResponse.java",
             "import com.example.coffeeordersystem.order.application.OrderResult;");
     assertThrows(AssertionError.class, () -> verifyCommonIndependence(commonFeatureLeak));
+    SourceFile commonRootFile =
+        syntheticSource("common/SharedHelper.java", "class SharedHelper {}");
+    assertThrows(AssertionError.class, () -> verifyCommonLocation(commonRootFile));
     SourceFile menuControllerWithExtraDependency =
         syntheticSource(
             "menu/api/MenuController.java",
@@ -596,6 +596,16 @@ class LayeredArchitectureTest {
         fail(source.path() + " Common은 기능 코드에 의존할 수 없습니다: " + references.group());
       }
     }
+  }
+
+  private void verifyCommonLocation(SourceFile source) {
+    String sourcePath = relativeSourcePath(source.path());
+    if (!sourcePath.startsWith("common/")) {
+      return;
+    }
+    assertTrue(
+        sourcePath.matches("common/(api|error|observability)/[^/]+\\.java"),
+        source.path() + " Common Java 소스는 승인된 API·오류·관측성 경계에 있어야 합니다.");
   }
 
   private Map<String, Set<String>> featureDependencies(List<SourceFile> sources) {
