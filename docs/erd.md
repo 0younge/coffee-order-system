@@ -7,7 +7,7 @@
 - 금액과 포인트는 소수점 오차가 없는 정수로 표현하며 `1원 = 1P`다.
 - 날짜·시간은 UTC로 저장하고 API 경계에서 ISO 8601로 표현한다.
 - 메뉴명·주문 스냅샷처럼 자연어를 담는 문자열은 `utf8mb4`를 사용한다. 상태·유형·UUID·해시처럼 계약상 정확히 일치해야 하는 코드는 `ascii_bin`으로 대소문자를 구분한다.
-- 업무 ID는 `BIGINT AUTO_INCREMENT`, 이벤트 ID와 claim token은 UUID 문자열 `CHAR(36)`, 시각은 UTC `DATETIME(6)`을 사용한다.
+- 업무 ID는 `BIGINT AUTO_INCREMENT`, 이벤트 ID와 claim token은 UUID 문자열 `CHAR(36)`, 시각은 UTC `DATETIME(6)`을 사용한다. 주문 시각은 API·JSON payload·멱등 응답에도 같은 microsecond 정밀도 값으로 기록한다.
 - Mermaid 도식의 `varchar_N`, `char_36`, `datetime_6` 표기는 각각 SQL의 `VARCHAR(N)`, `CHAR(36)`, `DATETIME(6)`을 뜻한다.
 - 상태에 따라 존재하지 않는 값으로 명시한 컬럼은 `NULL`을 허용하고, 그 밖의 컬럼은 모두 `NOT NULL`이다. Outbox의 `next_retry_at`과 마지막 오류 필드는 아래 상태별 필드 행렬을 따른다.
 - 도식의 `PK`, `FK`와 UNIQUE 주석만 확정된 키를 표시한다. 복합 UNIQUE와 CHECK는 아래 표에서 설명한다.

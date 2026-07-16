@@ -20,6 +20,7 @@ import com.example.coffeeordersystem.point.LockedPointBalance;
 import com.example.coffeeordersystem.point.PointPaymentService;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -47,7 +48,8 @@ class OrderServiceTest {
     LockedPointBalance pointBalance = mock(LockedPointBalance.class);
     CountDownLatch lockAttempted = new CountDownLatch(1);
     CountDownLatch releaseLock = new CountDownLatch(1);
-    Instant paidAt = Instant.parse("2026-07-16T06:00:00Z");
+    Instant clockInstant = Instant.parse("2026-07-16T06:00:00.123456789Z");
+    Instant paidAt = clockInstant.truncatedTo(ChronoUnit.MICROS);
 
     when(pointPaymentService.lock(1L))
         .thenAnswer(
@@ -56,7 +58,7 @@ class OrderServiceTest {
               assertTrue(releaseLock.await(2, TimeUnit.SECONDS));
               return pointBalance;
             });
-    when(clock.instant()).thenReturn(paidAt);
+    when(clock.instant()).thenReturn(clockInstant);
     when(requestHasher.hash(IdempotencyOperation.ORDER, 2L)).thenReturn("request-hash");
     when(idempotencyService.claim(
             1L, IdempotencyOperation.ORDER, "idempotency-key", "request-hash", paidAt))

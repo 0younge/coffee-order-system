@@ -235,6 +235,8 @@ sequenceDiagram
 
 메뉴 부재 또는 잔액 부족은 예상 가능한 결과로 멱등 레코드만 `COMPLETED` 상태로 커밋하고, 포인트·주문·Outbox는 변경하지 않는다. DB 오류, 5초 락 timeout, deadlock이나 Outbox 삽입 실패는 전체 트랜잭션을 롤백한다. 외부 API 호출은 커밋 이후 별도 워커가 수행한다.
 
+결제 시각은 사용자 행 잠금 뒤 `Clock`에서 한 번만 읽고 MySQL `DATETIME(6)`과 같은 microsecond 정밀도로 절삭한다. 이 하나의 값을 포인트 변경, 주문 `paid_at`·`created_at`, Outbox `occurredAt`·`next_retry_at`·`created_at`, API와 멱등 응답에 함께 사용한다.
+
 현재 주문은 메뉴 하나와 수량 1만 표현한다. 메뉴명과 결제금액 스냅샷은 주문 이력용이며, 인기 메뉴 응답의 이름과 가격은 현재 `menus`에서 가져온다.
 
 ## 12. Outbox 전달

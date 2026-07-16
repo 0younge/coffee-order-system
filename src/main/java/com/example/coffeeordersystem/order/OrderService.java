@@ -14,6 +14,7 @@ import com.example.coffeeordersystem.point.LockedPointBalance;
 import com.example.coffeeordersystem.point.PointPaymentService;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,7 +58,7 @@ class OrderService {
   @Transactional
   OrderResult place(OrderCommand command) {
     LockedPointBalance pointBalance = pointPaymentService.lock(command.userId());
-    Instant now = clock.instant();
+    Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
 
     String requestHash = requestHasher.hash(IdempotencyOperation.ORDER, command.menuId());
     IdempotencyClaim claim =

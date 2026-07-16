@@ -2,13 +2,16 @@ package com.example.coffeeordersystem.order;
 
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.AfterEach;
@@ -21,6 +24,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.ObjectMapper;
@@ -31,6 +35,8 @@ import tools.jackson.databind.ObjectMapper;
 class OrderApiTest {
 
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(8_500_000_000L);
+  private static final Instant NANOSECOND_TIME = Instant.parse("2026-07-16T06:00:00.123456789Z");
+  private static final Instant MICROSECOND_TIME = NANOSECOND_TIME.truncatedTo(ChronoUnit.MICROS);
 
   @Autowired private MockMvc mockMvc;
 
@@ -38,11 +44,14 @@ class OrderApiTest {
 
   @Autowired private ObjectMapper objectMapper;
 
+  @MockitoBean private Clock clock;
+
   private long userId;
   private long menuId;
 
   @BeforeEach
   void setUp() {
+    when(clock.instant()).thenReturn(NANOSECOND_TIME);
     userId = ID_SEQUENCE.addAndGet(2);
     menuId = userId + 1;
     insertUser(5_000L);
@@ -62,7 +71,7 @@ class OrderApiTest {
   }
 
   @Test
-  @DisplayName("IT-ORDER-001 AT-ORDER-001 AT-CONTRACT-002 주문 성공과 UTC 시각을 저장한다")
+  @DisplayName("IT-ORDER-001 IT-TIME-002 AT-ORDER-001 AT-CONTRACT-002 주문 시각을 microsecond로 일치시킨다")
   void placesPaidOrderWithSnapshotAndOutbox() throws Exception {
     MvcResult response =
         mockMvc
@@ -132,6 +141,10 @@ class OrderApiTest {
         jdbcTemplate
             .queryForObject("SELECT paid_at FROM orders WHERE user_id = ?", Timestamp.class, userId)
             .toInstant();
+    Instant pointUpdatedAt =
+        jdbcTemplate
+            .queryForObject("SELECT updated_at FROM users WHERE id = ?", Timestamp.class, userId)
+            .toInstant();
     Instant orderCreatedAt =
         jdbcTemplate
             .queryForObject(
@@ -161,11 +174,38 @@ class OrderApiTest {
                 Timestamp.class,
                 userId)
             .toInstant();
+    String idempotencyResponse =
+        jdbcTemplate.queryForObject(
+            "SELECT response_body FROM idempotency_records WHERE user_id = ?",
+            String.class,
+            userId);
+    Instant idempotencyPaidAt =
+        Instant.parse(
+            objectMapper.readTree(idempotencyResponse).get("data").get("paidAt").stringValue());
+    Instant idempotencyCompletedAt =
+        jdbcTemplate
+            .queryForObject(
+                "SELECT completed_at FROM idempotency_records WHERE user_id = ?",
+                Timestamp.class,
+                userId)
+            .toInstant();
+    Instant idempotencyUpdatedAt =
+        jdbcTemplate
+            .queryForObject(
+                "SELECT updated_at FROM idempotency_records WHERE user_id = ?",
+                Timestamp.class,
+                userId)
+            .toInstant();
+    assertEquals(MICROSECOND_TIME, paidAt);
+    assertEquals(paidAt, pointUpdatedAt);
     assertEquals(paidAt, orderPaidAt);
     assertEquals(paidAt, orderCreatedAt);
     assertEquals(paidAt, occurredAt);
     assertEquals(paidAt, nextRetryAt);
     assertEquals(paidAt, outboxCreatedAt);
+    assertEquals(paidAt, idempotencyPaidAt);
+    assertEquals(paidAt, idempotencyCompletedAt);
+    assertEquals(paidAt, idempotencyUpdatedAt);
   }
 
   @Test
