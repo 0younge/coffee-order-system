@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import tools.jackson.core.JsonToken;
 import tools.jackson.databind.exc.MismatchedInputException;
+import tools.jackson.databind.exc.UnrecognizedPropertyException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -67,6 +68,7 @@ public class GlobalExceptionHandler {
     Throwable current = exception;
     while (current != null) {
       if (current instanceof MismatchedInputException mismatchedInputException
+          && !(mismatchedInputException instanceof UnrecognizedPropertyException)
           && mismatchedInputException.getCurrentToken() == JsonToken.VALUE_NUMBER_FLOAT
           && mismatchedInputException.getPath().stream()
               .anyMatch(reference -> fieldName.equals(reference.getPropertyName()))) {

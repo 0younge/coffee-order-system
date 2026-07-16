@@ -21,6 +21,8 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -32,6 +34,8 @@ class OrderApiTest {
   @Autowired private MockMvc mockMvc;
 
   @Autowired private JdbcTemplate jdbcTemplate;
+
+  @Autowired private ObjectMapper objectMapper;
 
   private long userId;
   private long menuId;
@@ -59,19 +63,21 @@ class OrderApiTest {
   @Test
   @DisplayName("IT-ORDER-001 AT-ORDER-001 주문 성공 상태를 한 트랜잭션에 저장한다")
   void placesPaidOrderWithSnapshotAndOutbox() throws Exception {
-    mockMvc
-        .perform(order(UUID.randomUUID().toString(), body(menuId)))
-        .andExpect(status().isCreated())
-        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-        .andExpect(jsonPath("$.success").value(true))
-        .andExpect(jsonPath("$.code").value("ORDER_PAID"))
-        .andExpect(jsonPath("$.message").value("주문과 결제가 완료되었습니다."))
-        .andExpect(jsonPath("$.data.orderId").isNumber())
-        .andExpect(jsonPath("$.data.menuId").value(menuId))
-        .andExpect(jsonPath("$.data.menuName").value("테스트 아메리카노"))
-        .andExpect(jsonPath("$.data.paidAmount").value(4_000L))
-        .andExpect(jsonPath("$.data.remainingBalance").value(1_000L))
-        .andExpect(jsonPath("$.data.paidAt").isString());
+    MvcResult response =
+        mockMvc
+            .perform(order(UUID.randomUUID().toString(), body(menuId)))
+            .andExpect(status().isCreated())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.code").value("ORDER_PAID"))
+            .andExpect(jsonPath("$.message").value("주문과 결제가 완료되었습니다."))
+            .andExpect(jsonPath("$.data.orderId").isNumber())
+            .andExpect(jsonPath("$.data.menuId").value(menuId))
+            .andExpect(jsonPath("$.data.menuName").value("테스트 아메리카노"))
+            .andExpect(jsonPath("$.data.paidAmount").value(4_000L))
+            .andExpect(jsonPath("$.data.remainingBalance").value(1_000L))
+            .andExpect(jsonPath("$.data.paidAt").isString())
+            .andReturn();
 
     assertEquals(1_000L, balance());
     assertEquals(1L, orderCount());
@@ -114,18 +120,64 @@ class OrderApiTest {
                 + "(SELECT id FROM orders WHERE user_id = "
                 + userId
                 + ")"));
+    Instant paidAt =
+        Instant.parse(
+            objectMapper
+                .readTree(response.getResponse().getContentAsString())
+                .get("data")
+                .get("paidAt")
+                .stringValue());
+    Instant orderPaidAt =
+        jdbcTemplate
+            .queryForObject("SELECT paid_at FROM orders WHERE user_id = ?", Timestamp.class, userId)
+            .toInstant();
+    Instant orderCreatedAt =
+        jdbcTemplate
+            .queryForObject(
+                "SELECT created_at FROM orders WHERE user_id = ?", Timestamp.class, userId)
+            .toInstant();
+    String payload =
+        jdbcTemplate.queryForObject(
+            "SELECT payload FROM outbox_events WHERE order_id IN "
+                + "(SELECT id FROM orders WHERE user_id = ?)",
+            String.class,
+            userId);
+    Instant occurredAt =
+        Instant.parse(objectMapper.readTree(payload).get("occurredAt").stringValue());
+    Instant nextRetryAt =
+        jdbcTemplate
+            .queryForObject(
+                "SELECT next_retry_at FROM outbox_events WHERE order_id IN "
+                    + "(SELECT id FROM orders WHERE user_id = ?)",
+                Timestamp.class,
+                userId)
+            .toInstant();
+    Instant outboxCreatedAt =
+        jdbcTemplate
+            .queryForObject(
+                "SELECT created_at FROM outbox_events WHERE order_id IN "
+                    + "(SELECT id FROM orders WHERE user_id = ?)",
+                Timestamp.class,
+                userId)
+            .toInstant();
+    assertEquals(paidAt, orderPaidAt);
+    assertEquals(paidAt, orderCreatedAt);
+    assertEquals(paidAt, occurredAt);
+    assertEquals(paidAt, nextRetryAt);
+    assertEquals(paidAt, outboxCreatedAt);
   }
 
   @Test
   @DisplayName("AT-USER-001 존재하지 않는 사용자는 어떤 상태도 남기지 않는다")
   void rejectsMissingUserWithoutIdempotency() throws Exception {
     long missingUserId = userId + 100_000L;
+    long missingMenuId = menuId + 100_000L;
 
     mockMvc
         .perform(
             order(
                 UUID.randomUUID().toString(),
-                "{\"userId\":" + missingUserId + ",\"menuId\":" + menuId + "}"))
+                "{\"userId\":" + missingUserId + ",\"menuId\":" + missingMenuId + "}"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
 
@@ -174,6 +226,11 @@ class OrderApiTest {
         "{\"userId\":" + userId + ",\"menuId\":" + menuId + ",\"unknown\":true}",
         400,
         "INVALID_REQUEST");
+    expectError(
+        UUID.randomUUID().toString(),
+        "{\"userId\":" + userId + ",\"menuId\":" + menuId + ",\"amount\":1.5}",
+        400,
+        "INVALID_REQUEST");
     mockMvc
         .perform(
             post("/api/v1/orders")
@@ -190,9 +247,11 @@ class OrderApiTest {
 
     String missingMenuKey = UUID.randomUUID().toString();
     long missingMenuId = menuId + 100_000L;
+    jdbcTemplate.update("UPDATE users SET point_balance = 0 WHERE id = ?", userId);
     for (int attempt = 0; attempt < 2; attempt++) {
       expectError(missingMenuKey, body(missingMenuId), 404, "MENU_NOT_FOUND");
     }
+    assertEquals(0L, balance());
     assertEquals(1L, idempotencyCount());
     assertEquals(0L, orderCount());
     assertEquals(0L, outboxCount());
@@ -215,19 +274,32 @@ class OrderApiTest {
   }
 
   @Test
-  @DisplayName("IT-IDEM-001 AT-ORDER-004 같은 주문 재요청은 최초 결과를 재사용한다")
+  @DisplayName("IT-IDEM-001 AT-ORDER-004 현재 상태가 바뀌어도 최초 주문 결과를 재사용한다")
   void reusesSameOrderRequest() throws Exception {
     String key = UUID.randomUUID().toString();
 
-    for (int attempt = 0; attempt < 2; attempt++) {
-      mockMvc
-          .perform(order(key, body(menuId)))
-          .andExpect(status().isCreated())
-          .andExpect(jsonPath("$.code").value("ORDER_PAID"))
-          .andExpect(jsonPath("$.data.remainingBalance").value(1_000L));
-    }
+    String firstResponse =
+        mockMvc
+            .perform(order(key, body(menuId)))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.code").value("ORDER_PAID"))
+            .andExpect(jsonPath("$.data.remainingBalance").value(1_000L))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    jdbcTemplate.update("UPDATE menus SET name = '변경된 메뉴', price = 9000 WHERE id = ?", menuId);
+    jdbcTemplate.update("UPDATE users SET point_balance = 777 WHERE id = ?", userId);
 
-    assertEquals(1_000L, balance());
+    String replayResponse =
+        mockMvc
+            .perform(order(key, body(menuId)))
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    assertEquals(objectMapper.readTree(firstResponse), objectMapper.readTree(replayResponse));
+    assertEquals(777L, balance());
     assertEquals(1L, orderCount());
     assertEquals(1L, outboxCount());
     assertEquals(1L, idempotencyCount());
@@ -236,12 +308,11 @@ class OrderApiTest {
   @Test
   @DisplayName("IT-IDEM-002 AT-ORDER-005 같은 키의 다른 메뉴는 추가 결제 없이 거절한다")
   void rejectsDifferentMenuWithSameKey() throws Exception {
-    long otherMenuId = menuId + 10_000L;
-    insertMenu(otherMenuId, "테스트 라떼", 1_000L);
+    long missingMenuId = menuId + 10_000L;
     String key = UUID.randomUUID().toString();
 
     mockMvc.perform(order(key, body(menuId))).andExpect(status().isCreated());
-    expectError(key, body(otherMenuId), 409, "IDEMPOTENCY_KEY_REUSED");
+    expectError(key, body(missingMenuId), 409, "IDEMPOTENCY_KEY_REUSED");
 
     assertEquals(1_000L, balance());
     assertEquals(1L, orderCount());

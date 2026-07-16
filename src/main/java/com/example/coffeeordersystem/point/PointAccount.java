@@ -8,7 +8,7 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "users")
-public class PointAccount {
+class PointAccount {
 
   @Id private Long id;
 
@@ -26,7 +26,7 @@ public class PointAccount {
     this.updatedAt = updatedAt;
   }
 
-  public long pointBalance() {
+  long pointBalance() {
     return pointBalance;
   }
 
@@ -35,7 +35,7 @@ public class PointAccount {
     updatedAt = now;
   }
 
-  public boolean pay(long amount, Instant now) {
+  boolean pay(long amount, Instant now) {
     if (pointBalance < amount) {
       return false;
     }

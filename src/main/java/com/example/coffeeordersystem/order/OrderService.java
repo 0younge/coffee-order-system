@@ -1,17 +1,16 @@
 package com.example.coffeeordersystem.order;
 
 import com.example.coffeeordersystem.common.api.ApiResponse;
-import com.example.coffeeordersystem.common.error.ApiException;
 import com.example.coffeeordersystem.common.error.ErrorCode;
 import com.example.coffeeordersystem.idempotency.IdempotencyClaim;
 import com.example.coffeeordersystem.idempotency.IdempotencyOperation;
 import com.example.coffeeordersystem.idempotency.IdempotencyService;
 import com.example.coffeeordersystem.idempotency.RequestHasher;
-import com.example.coffeeordersystem.menu.Menu;
-import com.example.coffeeordersystem.menu.MenuRepository;
+import com.example.coffeeordersystem.menu.MenuResponse;
+import com.example.coffeeordersystem.menu.MenuService;
 import com.example.coffeeordersystem.outbox.OutboxEventWriter;
-import com.example.coffeeordersystem.point.PointAccount;
-import com.example.coffeeordersystem.point.PointAccountRepository;
+import com.example.coffeeordersystem.point.LockedPointBalance;
+import com.example.coffeeordersystem.point.PointPaymentService;
 import java.time.Clock;
 import java.time.Instant;
 import org.springframework.http.HttpStatus;
@@ -23,28 +22,28 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 class OrderService {
 
-  private final PointAccountRepository pointAccountRepository;
+  private final PointPaymentService pointPaymentService;
   private final IdempotencyService idempotencyService;
   private final RequestHasher requestHasher;
-  private final MenuRepository menuRepository;
+  private final MenuService menuService;
   private final OrderRepository orderRepository;
   private final OutboxEventWriter outboxEventWriter;
   private final ObjectMapper objectMapper;
   private final Clock clock;
 
   OrderService(
-      PointAccountRepository pointAccountRepository,
+      PointPaymentService pointPaymentService,
       IdempotencyService idempotencyService,
       RequestHasher requestHasher,
-      MenuRepository menuRepository,
+      MenuService menuService,
       OrderRepository orderRepository,
       OutboxEventWriter outboxEventWriter,
       ObjectMapper objectMapper,
       Clock clock) {
-    this.pointAccountRepository = pointAccountRepository;
+    this.pointPaymentService = pointPaymentService;
     this.idempotencyService = idempotencyService;
     this.requestHasher = requestHasher;
-    this.menuRepository = menuRepository;
+    this.menuService = menuService;
     this.orderRepository = orderRepository;
     this.outboxEventWriter = outboxEventWriter;
     this.objectMapper = objectMapper;
@@ -54,10 +53,7 @@ class OrderService {
   @Transactional
   OrderResult place(OrderCommand command) {
     Instant now = clock.instant();
-    PointAccount account =
-        pointAccountRepository
-            .findByIdForUpdate(command.userId())
-            .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
+    LockedPointBalance pointBalance = pointPaymentService.lock(command.userId());
 
     String requestHash = requestHasher.hash(IdempotencyOperation.ORDER, command.menuId());
     IdempotencyClaim claim =
@@ -74,22 +70,23 @@ class OrderService {
       return new OrderResult(claim.httpStatus(), claim.responseBody());
     }
 
-    Menu menu = menuRepository.findById(command.menuId()).orElse(null);
+    MenuResponse menu = menuService.findById(command.menuId()).orElse(null);
     if (menu == null) {
       return completeFailure(claim, ErrorCode.MENU_NOT_FOUND, now);
     }
-    if (!account.pay(menu.price(), now)) {
+    if (!pointBalance.pay(menu.price(), now)) {
       return completeFailure(claim, ErrorCode.INSUFFICIENT_POINT, now);
     }
 
     Order order =
         orderRepository.save(
-            Order.paid(command.userId(), menu.id(), menu.name(), menu.price(), now));
-    outboxEventWriter.appendOrderPaid(order.id(), command.userId(), menu.id(), menu.price(), now);
+            Order.paid(command.userId(), menu.menuId(), menu.name(), menu.price(), now));
+    outboxEventWriter.appendOrderPaid(
+        order.id(), command.userId(), menu.menuId(), menu.price(), now);
     OrderResult result =
         success(
             new OrderResponse(
-                order.id(), menu.id(), menu.name(), menu.price(), account.pointBalance(), now));
+                order.id(), menu.menuId(), menu.name(), menu.price(), pointBalance.balance(), now));
     complete(claim, result, "ORDER_PAID", now);
     return result;
   }

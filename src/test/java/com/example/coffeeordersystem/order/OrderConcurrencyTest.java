@@ -62,7 +62,7 @@ class OrderConcurrencyTest {
         userId);
     jdbcTemplate.update("DELETE FROM orders WHERE user_id = ?", userId);
     jdbcTemplate.update("DELETE FROM idempotency_records WHERE user_id = ?", userId);
-    jdbcTemplate.update("DELETE FROM menus WHERE id = ?", menuId);
+    jdbcTemplate.update("DELETE FROM menus WHERE id IN (?, ?)", menuId, menuId + 10_000L);
     jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
   }
 
@@ -111,6 +111,30 @@ class OrderConcurrencyTest {
     assertEquals(1L, idempotencyCount());
   }
 
+  @Test
+  @DisplayName("CT-IDEM-002 같은 키의 다른 메뉴가 동시에 도착하면 한 주문만 결제한다")
+  void paysOnlyOneOfConcurrentDifferentMenusWithSameKey() throws Exception {
+    long otherMenuId = menuId + 10_000L;
+    jdbcTemplate.update(
+        "INSERT INTO menus (id, name, price, created_at) VALUES (?, '다른 동시성 메뉴', 4000, ?)",
+        otherMenuId,
+        Timestamp.from(Instant.parse("2026-07-16T00:00:00Z")));
+    String key = UUID.randomUUID().toString();
+
+    List<OrderResult> results =
+        executeConcurrently(List.of(command(menuId, key), command(otherMenuId, key)));
+
+    Set<String> resultCodes =
+        results.stream()
+            .map(result -> result.body().get("code").stringValue())
+            .collect(Collectors.toSet());
+    assertEquals(Set.of("ORDER_PAID", "IDEMPOTENCY_KEY_REUSED"), resultCodes);
+    assertEquals(1_000L, balance());
+    assertEquals(1L, orderCount());
+    assertEquals(1L, outboxCount());
+    assertEquals(1L, idempotencyCount());
+  }
+
   private List<OrderResult> executeConcurrently(List<OrderCommand> commands) throws Exception {
     CountDownLatch start = new CountDownLatch(1);
     ExecutorService executor = Executors.newFixedThreadPool(commands.size());
@@ -138,7 +162,11 @@ class OrderConcurrencyTest {
   }
 
   private OrderCommand command(String idempotencyKey) {
-    return OrderCommand.from(new OrderRequest(userId, menuId), idempotencyKey);
+    return command(menuId, idempotencyKey);
+  }
+
+  private OrderCommand command(long targetMenuId, String idempotencyKey) {
+    return OrderCommand.from(new OrderRequest(userId, targetMenuId), idempotencyKey);
   }
 
   private long balance() {
