@@ -245,7 +245,7 @@ sequenceDiagram
 
 1. 즉시 또는 재시도 시각이 지난 `PENDING` 이벤트와 30초 lease가 만료된 `PROCESSING` 이벤트를 후보로 조회한다.
 2. 선점 정렬용 인덱스를 따라 최대 배치를 한 번의 `FOR UPDATE SKIP LOCKED LIMIT` 조회로 잠가 다른 워커가 기다리지 않고 다음 행을 찾게 한다.
-3. 선택한 행을 한 번의 JDBC batch 갱신으로 `PROCESSING`으로 바꾸고 행마다 새 `claim_token`과 `locked_at`을 기록한다.
+3. 선택한 행을 `CASE event_id` 기반 단일 set-based 갱신으로 `PROCESSING`으로 바꾸고 행마다 새 `claim_token`과 `locked_at`을 기록한다.
 4. 점유 트랜잭션을 커밋한 다음 DB 트랜잭션 밖에서 외부 HTTP를 호출한다.
 5. 결과 반영은 `event_id`, `PROCESSING`, `claim_token`이 모두 일치할 때만 수행한다.
 
@@ -324,7 +324,7 @@ LIMIT 3;
 | 충전·결제 | 사용자 PK `FOR UPDATE` | `users(id)` PK | 락 대기, deadlock, 트랜잭션 시간 |
 | 멱등 결과 | 사용자·작업·키 단건 조회/삽입 | UNIQUE `(user_id, operation_type, idempotency_key)` | 중복키 대기, 재사용률, 충돌률 |
 | 인기 메뉴 | 상태·시간 구간 집계 | `orders(status, paid_at, menu_id)` | 스캔 행 수, 임시 테이블, 정렬, 응답 분포 |
-| 전송 예정 점유 | 재시도·생성 시각 정렬 뒤 `SKIP LOCKED LIMIT` | `outbox_events(next_retry_at, created_at, event_id, status, locked_at)` | 잠금 조회·batch 갱신 횟수, backlog, 예약 지연 |
+| 전송 예정 점유 | 재시도·생성 시각 정렬 뒤 `SKIP LOCKED LIMIT` | `outbox_events(next_retry_at, created_at, event_id, status, locked_at)` | 잠금 조회·set-based 갱신 횟수, backlog, 예약 지연 |
 | lease 만료 복구 | 같은 선점 조회에서 상태·잠금 시각 필터 | `outbox_events(next_retry_at, created_at, event_id, status, locked_at)`; 추가 후보 `(status, locked_at)` | 만료 건수, 필터 행 수, 중복 점유, claim 불일치 |
 | 주문당 이벤트 보장 | 주문 ID 중복 방지 | `outbox_events(order_id)` UNIQUE | 중복 삽입 실패 |
 

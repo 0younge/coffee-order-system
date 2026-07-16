@@ -92,6 +92,8 @@ class OutboxWorkerTest {
     verify(outboxStore, times(2)).claim(CLOCK.instant(), 1);
     verify(outboxStore).publish("event-2", "claim-2", CLOCK.instant());
     assertTrue(output.getAll().contains("errorType=\"IllegalStateException\""));
+    assertTrue(output.getAll().contains("result=\"delivery_start_failed\""));
+    assertFalse(output.getAll().contains("result=\"state_update_failed\""));
     assertFalse(output.getAll().contains("HTTP_CLIENT_SECRET"));
     assertFalse(output.getAll().contains("top-secret"));
   }

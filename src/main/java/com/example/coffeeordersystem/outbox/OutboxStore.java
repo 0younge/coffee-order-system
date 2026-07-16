@@ -1,10 +1,10 @@
 package com.example.coffeeordersystem.outbox;
 
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -49,24 +49,35 @@ class OutboxStore {
             leaseCutoff,
             limit);
     List<OutboxClaim> claims = new ArrayList<>();
-    List<Object[]> batchArguments = new ArrayList<>();
     for (LockedEvent event : lockedEvents) {
       String claimToken = UUID.randomUUID().toString();
       claims.add(new OutboxClaim(event.eventId(), claimToken, event.payload(), event.retryCount()));
-      batchArguments.add(new Object[] {Timestamp.from(now), claimToken, event.eventId()});
     }
-    if (batchArguments.isEmpty()) {
+    if (claims.isEmpty()) {
       return List.of();
     }
-    int[] updated =
-        jdbcTemplate.batchUpdate(
+    List<Object> updateArguments = new ArrayList<>();
+    updateArguments.add(Timestamp.from(now));
+    for (OutboxClaim claim : claims) {
+      updateArguments.add(claim.eventId());
+      updateArguments.add(claim.claimToken());
+    }
+    for (OutboxClaim claim : claims) {
+      updateArguments.add(claim.eventId());
+    }
+    String tokenCases = String.join(" ", Collections.nCopies(claims.size(), "WHEN ? THEN ?"));
+    String eventIds = String.join(", ", Collections.nCopies(claims.size(), "?"));
+    int updated =
+        jdbcTemplate.update(
             "UPDATE outbox_events SET status = 'PROCESSING', locked_at = ?, "
-                + "claim_token = ? WHERE event_id = ?",
-            batchArguments);
-    for (int updateCount : updated) {
-      if (updateCount != 1 && updateCount != Statement.SUCCESS_NO_INFO) {
-        throw new IllegalStateException("Outbox 이벤트를 선점할 수 없습니다.");
-      }
+                + "claim_token = CASE event_id "
+                + tokenCases
+                + " END WHERE event_id IN ("
+                + eventIds
+                + ")",
+            updateArguments.toArray());
+    if (updated != claims.size()) {
+      throw new IllegalStateException("Outbox 이벤트를 선점할 수 없습니다.");
     }
     return List.copyOf(claims);
   }

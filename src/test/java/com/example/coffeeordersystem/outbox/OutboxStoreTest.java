@@ -257,7 +257,7 @@ class OutboxStoreTest {
   }
 
   @Test
-  @DisplayName("IT-OUTBOX-004 50건을 잠금 조회 1회와 batch 갱신 1회로 선점한다")
+  @DisplayName("IT-OUTBOX-004 50건을 잠금 조회 1회와 set-based 갱신 1회로 선점한다")
   void claimsFiftyRowsInTwoDatabaseStatements() {
     List<String> expected = new ArrayList<>();
     for (int index = 0; index < 50; index++) {
@@ -283,8 +283,8 @@ class OutboxStoreTest {
     assertEquals(50, claimTokens.size());
     assertEquals(claimTokens, storedClaimTokens);
     assertEquals(2L, statementCounter.preparedStatements.get());
-    assertEquals(1L, statementCounter.batchExecutions.get());
-    assertEquals(0L, statementCounter.individualUpdateExecutions.get());
+    assertEquals(0L, statementCounter.batchExecutions.get());
+    assertEquals(1L, statementCounter.individualUpdateExecutions.get());
     assertEquals(
         50L,
         count(

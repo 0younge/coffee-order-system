@@ -73,7 +73,7 @@ class OutboxWorker {
                 Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
                 log.atWarn()
                     .addKeyValue("errorType", cause.getClass().getSimpleName())
-                    .log("Outbox 배치 결과 반영 중 오류가 발생했습니다.");
+                    .log("Outbox 배치 처리 중 오류가 발생했습니다.");
               }
               active.set(false);
             });
@@ -85,7 +85,16 @@ class OutboxWorker {
     try {
       delivery = httpSender.send(claim.payload());
     } catch (RuntimeException exception) {
-      delivery = CompletableFuture.failedFuture(exception);
+      log.atWarn()
+          .addKeyValue("eventId", claim.eventId())
+          .addKeyValue("attempt", claim.attempt())
+          .addKeyValue("target", "/events/orders")
+          .addKeyValue(
+              "latencyMs", java.time.Duration.ofNanos(System.nanoTime() - startedAt).toMillis())
+          .addKeyValue("result", "delivery_start_failed")
+          .addKeyValue("errorType", exception.getClass().getSimpleName())
+          .log("Outbox 이벤트 전달 시작 실패");
+      return CompletableFuture.failedFuture(exception);
     }
     return delivery
         .thenAccept(
