@@ -70,20 +70,25 @@ public class GlobalExceptionHandler {
   }
 
   @ExceptionHandler(NoResourceFoundException.class)
-  public ResponseEntity<Void> handleNoResourceFound(NoResourceFoundException exception) {
-    return ResponseEntity.notFound().build();
+  public ResponseEntity<ApiResponse<Void>> handleNoResourceFound(
+      NoResourceFoundException exception) {
+    return errorResponse(ErrorCode.RESOURCE_NOT_FOUND);
   }
 
   @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-  public ResponseEntity<Void> handleMethodNotSupported(
+  public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(
       HttpRequestMethodNotSupportedException exception) {
-    return ResponseEntity.status(exception.getStatusCode()).build();
+    return ResponseEntity.status(ErrorCode.METHOD_NOT_ALLOWED.httpStatus())
+        .headers(exception.getHeaders())
+        .body(
+            ApiResponse.failure(
+                ErrorCode.METHOD_NOT_ALLOWED.name(), ErrorCode.METHOD_NOT_ALLOWED.message()));
   }
 
   @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
   public ResponseEntity<Void> handleMediaTypeNotAcceptable(
       HttpMediaTypeNotAcceptableException exception) {
-    return ResponseEntity.status(exception.getStatusCode()).build();
+    return ResponseEntity.status(exception.getStatusCode()).headers(exception.getHeaders()).build();
   }
 
   @ExceptionHandler(Exception.class)

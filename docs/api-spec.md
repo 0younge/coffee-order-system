@@ -12,7 +12,7 @@
 |---|---|
 | Base path | `/api/v1` |
 | 요청 Content-Type | 본문이 있는 `POST`는 `application/json`; 본문 없는 `GET`은 요구하지 않음 |
-| 응답 Content-Type | 모든 API 응답은 `application/json` |
+| 응답 Content-Type | 직렬화 가능한 업무·라우팅 응답은 `application/json`; JSON을 허용하지 않는 `Accept`의 `406`만 빈 본문 |
 | 충전·주문 멱등성 | UUID 문자열 `Idempotency-Key` 필수 |
 | 사용자 식별 | 충전·주문 요청 본문의 기존 사용자 `userId` |
 | 금액 단위 | 정수 포인트(P), 1원 = 1P |
@@ -66,6 +66,8 @@
 ```
 
 HTTP 상태 코드는 본문 코드와 별개로 의미에 맞게 사용하며, 클라이언트는 `code`로 구체적인 결과를 구분합니다.
+
+정의되지 않은 경로의 `404 RESOURCE_NOT_FOUND`와 지원하지 않는 메서드의 `405 METHOD_NOT_ALLOWED`도 같은 실패 봉투를 사용합니다. `405`는 해당 경로가 지원하는 메서드를 `Allow` 헤더로 함께 반환합니다. 요청의 `Accept`가 `application/json`을 허용하지 않아 발생한 `406 Not Acceptable`은 JSON 오류 본문 자체를 협상할 수 없으므로 공통 봉투의 유일한 예외이며 `Content-Type`과 본문 없이 반환합니다.
 
 ## 3. API 목록
 
@@ -328,8 +330,10 @@ JSON 원문, 공백과 필드 순서는 요청 해시 입력에 포함하지 않
 | 400 | `INVALID_REQUEST` | 필수 헤더·필드 누락, JSON 형식 또는 일반 필드 검증 실패 |
 | 400 | `INVALID_CHARGE_AMOUNT` | 충전 금액이 정수가 아니거나 0 이하이거나 signed `BIGINT` 범위 밖 |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | 본문이 있는 요청의 `Content-Type`이 `application/json`이 아님 |
+| 404 | `RESOURCE_NOT_FOUND` | 정의되지 않은 요청 경로 |
 | 404 | `USER_NOT_FOUND` | 충전·주문의 사용자 ID가 존재하지 않음 |
 | 404 | `MENU_NOT_FOUND` | 주문의 메뉴가 존재하지 않음 |
+| 405 | `METHOD_NOT_ALLOWED` | 경로는 존재하지만 요청 HTTP 메서드를 지원하지 않음; `Allow` 헤더 포함 |
 | 409 | `INSUFFICIENT_POINT` | 주문 결제 잔액 부족 |
 | 409 | `POINT_BALANCE_OVERFLOW` | 현재 잔액과 유효한 충전금액의 합이 signed `BIGINT` 범위를 초과 |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | 같은 사용자·작업의 같은 키에 다른 요청 내용 사용 |
@@ -337,6 +341,8 @@ JSON 원문, 공백과 필드 순서는 요청 해시 입력에 포함하지 않
 | 503 | `TEMPORARILY_UNAVAILABLE` | DB 락 대기 5초 초과 또는 deadlock |
 
 오류 응답의 `success`는 `false`, `data`는 `null`입니다. 예상하지 못한 오류의 내부 예외·SQL·자격 증명을 응답에 노출하지 않습니다.
+
+`406 Not Acceptable`은 위 오류 코드 표와 공통 봉투의 예외로, `Content-Type`과 본문 없이 반환합니다.
 
 ## 10. 외부 데이터 수집 API 계약
 
