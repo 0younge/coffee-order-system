@@ -1,21 +1,22 @@
-package com.example.coffeeordersystem.point;
+package com.example.coffeeordersystem.point.application;
 
 import com.example.coffeeordersystem.common.error.ApiException;
 import com.example.coffeeordersystem.common.error.ErrorCode;
 import com.example.coffeeordersystem.idempotency.application.IdempotencyKeyNormalizer;
 import java.math.BigInteger;
 
-record ChargeCommand(long userId, long amount, String idempotencyKey) {
+public record ChargeCommand(long userId, long amount, String idempotencyKey) {
 
   private static final BigInteger MAX_LONG = BigInteger.valueOf(Long.MAX_VALUE);
 
-  static ChargeCommand from(ChargeRequest request, String rawIdempotencyKey) {
-    if (request == null || request.userId() == null || request.userId() <= 0) {
+  public static ChargeCommand from(
+      Long userId, BigInteger requestedAmount, String rawIdempotencyKey) {
+    if (userId == null || userId <= 0) {
       throw new ApiException(ErrorCode.INVALID_REQUEST);
     }
-    long amount = validAmount(request.amount());
+    long amount = validAmount(requestedAmount);
     String idempotencyKey = IdempotencyKeyNormalizer.normalize(rawIdempotencyKey);
-    return new ChargeCommand(request.userId(), amount, idempotencyKey);
+    return new ChargeCommand(userId, amount, idempotencyKey);
   }
 
   private static long validAmount(BigInteger amount) {

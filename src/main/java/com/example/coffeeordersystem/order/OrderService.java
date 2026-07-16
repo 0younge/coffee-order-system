@@ -11,8 +11,8 @@ import com.example.coffeeordersystem.idempotency.application.RequestHasher;
 import com.example.coffeeordersystem.menu.application.MenuQueryFacade;
 import com.example.coffeeordersystem.menu.application.MenuSnapshot;
 import com.example.coffeeordersystem.outbox.OutboxEventWriter;
-import com.example.coffeeordersystem.point.LockedPointBalance;
-import com.example.coffeeordersystem.point.PointPaymentService;
+import com.example.coffeeordersystem.point.application.LockedPointBalance;
+import com.example.coffeeordersystem.point.application.PointPaymentFacade;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class OrderService {
 
-  private final PointPaymentService pointPaymentService;
+  private final PointPaymentFacade pointPaymentFacade;
   private final IdempotencyFacade idempotencyFacade;
   private final RequestHasher requestHasher;
   private final MenuQueryFacade menuQueryFacade;
@@ -37,7 +37,7 @@ class OrderService {
 
   @Transactional
   OrderResult place(OrderCommand command) {
-    LockedPointBalance pointBalance = pointPaymentService.lock(command.userId());
+    LockedPointBalance pointBalance = pointPaymentFacade.lock(command.userId());
     Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
 
     String requestHash = requestHasher.hash(IdempotencyOperation.ORDER, command.menuId());

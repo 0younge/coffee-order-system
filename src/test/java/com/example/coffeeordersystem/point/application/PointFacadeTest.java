@@ -1,19 +1,21 @@
-package com.example.coffeeordersystem.point;
+package com.example.coffeeordersystem.point.application;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doReturn;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.example.coffeeordersystem.common.api.ApiResponseJsonCodec;
 import com.example.coffeeordersystem.common.observability.BusinessEventLogger;
 import com.example.coffeeordersystem.idempotency.application.IdempotencyClaim;
 import com.example.coffeeordersystem.idempotency.application.IdempotencyFacade;
 import com.example.coffeeordersystem.idempotency.application.IdempotencyOperation;
+import com.example.coffeeordersystem.idempotency.application.IdempotencyResponseCodec;
 import com.example.coffeeordersystem.idempotency.application.RequestHasher;
+import com.example.coffeeordersystem.point.domain.PointAccount;
+import com.example.coffeeordersystem.point.infrastructure.PointAccountRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
@@ -23,9 +25,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.JsonNode;
 
-class PointServiceTest {
+class PointFacadeTest {
 
   @Test
   @DisplayName("CT-POINT-001 사용자 락을 얻은 뒤 충전 시각을 확정한다")
@@ -33,7 +34,7 @@ class PointServiceTest {
     PointAccountRepository pointAccountRepository = mock(PointAccountRepository.class);
     IdempotencyFacade idempotencyFacade = mock(IdempotencyFacade.class);
     RequestHasher requestHasher = mock(RequestHasher.class);
-    ApiResponseJsonCodec responseJsonCodec = mock(ApiResponseJsonCodec.class);
+    IdempotencyResponseCodec responseCodec = mock(IdempotencyResponseCodec.class);
     Clock clock = mock(Clock.class);
     BusinessEventLogger businessEventLogger = mock(BusinessEventLogger.class);
     PointAccount account = mock(PointAccount.class);
@@ -54,23 +55,20 @@ class PointServiceTest {
             1L, IdempotencyOperation.CHARGE, "idempotency-key", "request-hash", chargedAt))
         .thenReturn(new IdempotencyClaim(3L, "request-hash", "PROCESSING", null, null));
     when(account.pointBalance()).thenReturn(200L);
-    JsonNode responseBody = mock(JsonNode.class);
-    when(responseJsonCodec.write(any())).thenReturn("response-body");
-    doReturn(responseBody).when(responseJsonCodec).read("response-body");
+    when(responseCodec.encodeSuccess(anyString(), anyString(), any())).thenReturn("response-body");
 
-    PointService pointService =
-        new PointService(
+    PointFacade pointFacade =
+        new PointFacade(
             pointAccountRepository,
             idempotencyFacade,
             requestHasher,
-            responseJsonCodec,
+            responseCodec,
             clock,
             businessEventLogger);
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try {
       var result =
-          executor.submit(
-              () -> pointService.charge(new ChargeCommand(1L, 100L, "idempotency-key")));
+          executor.submit(() -> pointFacade.charge(new ChargeCommand(1L, 100L, "idempotency-key")));
 
       assertTrue(lockAttempted.await(2, TimeUnit.SECONDS));
       verifyNoInteractions(clock);

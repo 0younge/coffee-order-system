@@ -1,5 +1,6 @@
-package com.example.coffeeordersystem.point;
+package com.example.coffeeordersystem.point.application;
 
+import com.example.coffeeordersystem.point.domain.PointAccount;
 import java.time.Instant;
 
 public final class LockedPointBalance {

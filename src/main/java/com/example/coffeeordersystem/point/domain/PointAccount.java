@@ -1,4 +1,4 @@
-package com.example.coffeeordersystem.point;
+package com.example.coffeeordersystem.point.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "users")
-class PointAccount {
+public class PointAccount {
 
   @Id private Long id;
 
@@ -27,16 +27,16 @@ class PointAccount {
     this.updatedAt = updatedAt;
   }
 
-  long pointBalance() {
+  public long pointBalance() {
     return pointBalance;
   }
 
-  void charge(long amount, Instant now) {
+  public void charge(long amount, Instant now) {
     pointBalance = Math.addExact(pointBalance, amount);
     updatedAt = now;
   }
 
-  boolean pay(long amount, Instant now) {
+  public boolean pay(long amount, Instant now) {
     if (pointBalance < amount) {
       return false;
     }

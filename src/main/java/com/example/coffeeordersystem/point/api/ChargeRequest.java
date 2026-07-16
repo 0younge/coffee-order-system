@@ -1,4 +1,4 @@
-package com.example.coffeeordersystem.point;
+package com.example.coffeeordersystem.point.api;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;

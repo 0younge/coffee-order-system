@@ -17,8 +17,8 @@ import com.example.coffeeordersystem.idempotency.application.RequestHasher;
 import com.example.coffeeordersystem.menu.application.MenuQueryFacade;
 import com.example.coffeeordersystem.menu.application.MenuSnapshot;
 import com.example.coffeeordersystem.outbox.OutboxEventWriter;
-import com.example.coffeeordersystem.point.LockedPointBalance;
-import com.example.coffeeordersystem.point.PointPaymentService;
+import com.example.coffeeordersystem.point.application.LockedPointBalance;
+import com.example.coffeeordersystem.point.application.PointPaymentFacade;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -36,7 +36,7 @@ class OrderServiceTest {
   @Test
   @DisplayName("CT-ORDER-001 사용자 락을 얻은 뒤 결제 시각을 확정한다")
   void capturesPaymentTimeAfterUserLock() throws Exception {
-    PointPaymentService pointPaymentService = mock(PointPaymentService.class);
+    PointPaymentFacade pointPaymentFacade = mock(PointPaymentFacade.class);
     IdempotencyFacade idempotencyFacade = mock(IdempotencyFacade.class);
     RequestHasher requestHasher = mock(RequestHasher.class);
     MenuQueryFacade menuQueryFacade = mock(MenuQueryFacade.class);
@@ -51,7 +51,7 @@ class OrderServiceTest {
     Instant clockInstant = Instant.parse("2026-07-16T06:00:00.123456789Z");
     Instant paidAt = clockInstant.truncatedTo(ChronoUnit.MICROS);
 
-    when(pointPaymentService.lock(1L))
+    when(pointPaymentFacade.lock(1L))
         .thenAnswer(
             invocation -> {
               lockAttempted.countDown();
@@ -75,7 +75,7 @@ class OrderServiceTest {
 
     OrderService orderService =
         new OrderService(
-            pointPaymentService,
+            pointPaymentFacade,
             idempotencyFacade,
             requestHasher,
             menuQueryFacade,

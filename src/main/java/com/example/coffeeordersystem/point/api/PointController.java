@@ -1,5 +1,8 @@
-package com.example.coffeeordersystem.point;
+package com.example.coffeeordersystem.point.api;
 
+import com.example.coffeeordersystem.point.application.ChargeCommand;
+import com.example.coffeeordersystem.point.application.PointChargeResult;
+import com.example.coffeeordersystem.point.application.PointFacade;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -9,23 +12,25 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import tools.jackson.databind.JsonNode;
 
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/api/v1/points")
 class PointController {
 
-  private final PointService pointService;
+  private final PointFacade pointFacade;
 
   @PostMapping(
       path = "/charge",
       consumes = MediaType.APPLICATION_JSON_VALUE,
       produces = MediaType.APPLICATION_JSON_VALUE)
-  ResponseEntity<JsonNode> charge(
+  ResponseEntity<String> charge(
       @RequestHeader("Idempotency-Key") String idempotencyKey,
       @Valid @RequestBody ChargeRequest request) {
-    PointChargeResult result = pointService.charge(ChargeCommand.from(request, idempotencyKey));
-    return ResponseEntity.status(result.httpStatus()).body(result.body());
+    PointChargeResult result =
+        pointFacade.charge(ChargeCommand.from(request.userId(), request.amount(), idempotencyKey));
+    return ResponseEntity.status(result.httpStatus())
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(result.responseBody());
   }
 }

@@ -1,34 +1,35 @@
-package com.example.coffeeordersystem.point;
+package com.example.coffeeordersystem.point.application;
 
-import com.example.coffeeordersystem.common.api.ApiResponse;
-import com.example.coffeeordersystem.common.api.ApiResponseJsonCodec;
 import com.example.coffeeordersystem.common.error.ApiException;
 import com.example.coffeeordersystem.common.error.ErrorCode;
 import com.example.coffeeordersystem.common.observability.BusinessEventLogger;
 import com.example.coffeeordersystem.idempotency.application.IdempotencyClaim;
 import com.example.coffeeordersystem.idempotency.application.IdempotencyFacade;
 import com.example.coffeeordersystem.idempotency.application.IdempotencyOperation;
+import com.example.coffeeordersystem.idempotency.application.IdempotencyResponseCodec;
 import com.example.coffeeordersystem.idempotency.application.RequestHasher;
+import com.example.coffeeordersystem.point.domain.PointAccount;
+import com.example.coffeeordersystem.point.infrastructure.PointAccountRepository;
 import java.time.Clock;
 import java.time.Instant;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-@RequiredArgsConstructor
+@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 @Service
-class PointService {
+public class PointFacade {
 
   private final PointAccountRepository pointAccountRepository;
   private final IdempotencyFacade idempotencyFacade;
   private final RequestHasher requestHasher;
-  private final ApiResponseJsonCodec responseJsonCodec;
+  private final IdempotencyResponseCodec responseCodec;
   private final Clock clock;
   private final BusinessEventLogger businessEventLogger;
 
   @Transactional
-  PointChargeResult charge(ChargeCommand command) {
+  public PointChargeResult charge(ChargeCommand command) {
     PointAccount account =
         pointAccountRepository
             .findByIdForUpdate(command.userId())
@@ -47,8 +48,7 @@ class PointService {
       if (!claim.requestHash().equals(requestHash)) {
         return failure(ErrorCode.IDEMPOTENCY_KEY_REUSED);
       }
-      return new PointChargeResult(
-          claim.httpStatus(), responseJsonCodec.read(claim.responseBody()), claim.responseBody());
+      return new PointChargeResult(claim.httpStatus(), claim.responseBody());
     }
 
     try {
@@ -64,24 +64,20 @@ class PointService {
         success(
             "POINT_CHARGED",
             "포인트를 충전했습니다.",
-            new PointChargeResponse(command.amount(), account.pointBalance()));
+            new PointChargeData(command.amount(), account.pointBalance()));
     complete(claim, result, "POINT_CHARGED", now);
     businessEventLogger.pointResult(command.userId(), "POINT_CHARGED");
     return result;
   }
 
   private PointChargeResult success(String code, String message, Object data) {
-    return response(HttpStatus.OK.value(), ApiResponse.success(code, message, data));
+    return new PointChargeResult(200, responseCodec.encodeSuccess(code, message, data));
   }
 
   private PointChargeResult failure(ErrorCode errorCode) {
-    return response(
-        errorCode.httpStatus().value(), ApiResponse.failure(errorCode.name(), errorCode.message()));
-  }
-
-  private PointChargeResult response(int httpStatus, Object response) {
-    String responseBody = responseJsonCodec.write(response);
-    return new PointChargeResult(httpStatus, responseJsonCodec.read(responseBody), responseBody);
+    return new PointChargeResult(
+        errorCode.httpStatus().value(),
+        responseCodec.encodeFailure(errorCode.name(), errorCode.message()));
   }
 
   private void complete(

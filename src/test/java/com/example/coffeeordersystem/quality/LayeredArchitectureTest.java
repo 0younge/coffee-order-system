@@ -86,12 +86,42 @@ class LayeredArchitectureTest {
     String menuController = Files.readString(MAIN_SOURCE.resolve("menu/api/MenuController.java"));
     verifyMenuControllerFacadeOnly(
         new SourceFile(MAIN_SOURCE.resolve("menu/api/MenuController.java"), menuController));
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("point/api/PointController.java")),
+        "Point Controller는 API 계층에 있어야 합니다.");
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("point/application/PointFacade.java")),
+        "Point 충전은 공개 Application Facade를 제공해야 합니다.");
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("point/application/PointPaymentFacade.java")),
+        "Point 결제는 주문이 사용할 공개 Application Facade를 제공해야 합니다.");
+    assertFalse(
+        sources.stream()
+            .filter(source -> normalized(source.path()).contains("/point/"))
+            .map(source -> source.path().getFileName().toString())
+            .anyMatch(
+                name ->
+                    name.equals("PointService.java") || name.equals("PointPaymentService.java")),
+        "Point Facade 뒤에 기존 Service 위임 계층을 남길 수 없습니다.");
+    String pointController =
+        Files.readString(MAIN_SOURCE.resolve("point/api/PointController.java"));
+    verifyPointControllerFacadeOnly(
+        new SourceFile(MAIN_SOURCE.resolve("point/api/PointController.java"), pointController));
     String orderService = Files.readString(MAIN_SOURCE.resolve("order/OrderService.java"));
     assertTrue(
         orderService.contains("menu.application.MenuQueryFacade")
             && orderService.contains("menu.application.MenuSnapshot"),
         "Order는 Menu Application Facade와 Snapshot 계약만 사용해야 합니다.");
     assertFalse(orderService.contains("MenuResponse"), "Order는 Menu API 응답 DTO를 사용할 수 없습니다.");
+    assertTrue(
+        orderService.contains("point.application.PointPaymentFacade")
+            && orderService.contains("point.application.LockedPointBalance"),
+        "Order는 Point Application 결제 계약만 사용해야 합니다.");
+    assertFalse(
+        orderService.contains("point.api.")
+            || orderService.contains("point.domain.")
+            || orderService.contains("point.infrastructure."),
+        "Order는 Point API, Domain, Infrastructure를 직접 참조할 수 없습니다.");
   }
 
   @Test
@@ -135,6 +165,15 @@ class LayeredArchitectureTest {
     assertThrows(
         AssertionError.class,
         () -> verifyMenuControllerFacadeOnly(menuControllerWithExtraDependency));
+    SourceFile pointControllerWithExtraDependency =
+        syntheticSource(
+            "point/api/PointController.java",
+            "class PointController {\n"
+                + " private final PointFacade pointFacade;\n"
+                + " private final PointAccountRepository pointAccountRepository;\n}");
+    assertThrows(
+        AssertionError.class,
+        () -> verifyPointControllerFacadeOnly(pointControllerWithExtraDependency));
 
     SourceFile store =
         syntheticSource(
@@ -281,6 +320,22 @@ class LayeredArchitectureTest {
         source.contents().contains("com.example.coffeeordersystem.menu.domain.")
             || source.contents().contains("com.example.coffeeordersystem.menu.infrastructure."),
         "MenuController는 Menu Domain이나 Infrastructure를 직접 참조할 수 없습니다.");
+  }
+
+  private void verifyPointControllerFacadeOnly(SourceFile source) {
+    assertTrue(
+        source.contents().contains("PointFacade"), "PointController는 PointFacade를 사용해야 합니다.");
+    assertEquals(
+        1,
+        source.contents().lines().filter(line -> line.contains("private final ")).count(),
+        "PointController의 주입 의존성은 PointFacade 하나여야 합니다.");
+    assertTrue(
+        source.contents().contains("private final PointFacade pointFacade;"),
+        "PointController는 PointFacade를 생성자 주입해야 합니다.");
+    assertFalse(
+        source.contents().contains("com.example.coffeeordersystem.point.domain.")
+            || source.contents().contains("com.example.coffeeordersystem.point.infrastructure."),
+        "PointController는 Point Domain이나 Infrastructure를 직접 참조할 수 없습니다.");
   }
 
   private void verifyDomainIndependence(SourceFile source) {

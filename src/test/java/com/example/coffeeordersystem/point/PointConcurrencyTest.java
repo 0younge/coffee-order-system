@@ -5,6 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.example.coffeeordersystem.common.api.ApiResponseJsonCodec;
+import com.example.coffeeordersystem.point.application.ChargeCommand;
+import com.example.coffeeordersystem.point.application.PointChargeResult;
+import com.example.coffeeordersystem.point.application.PointFacade;
 import java.math.BigInteger;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -37,7 +41,9 @@ class PointConcurrencyTest {
 
   private static final AtomicLong USER_SEQUENCE = new AtomicLong(8_100_000_000L);
 
-  @Autowired private PointService pointService;
+  @Autowired private PointFacade pointFacade;
+
+  @Autowired private ApiResponseJsonCodec responseJsonCodec;
 
   @Autowired private JdbcTemplate jdbcTemplate;
 
@@ -85,7 +91,7 @@ class PointConcurrencyTest {
     try (HeldUserLock heldLock = holdUserLock(userId)) {
       Future<PointChargeResult> request =
           requestExecutor.submit(
-              () -> pointService.charge(command(userId, 100L, UUID.randomUUID().toString())));
+              () -> pointFacade.charge(command(userId, 100L, UUID.randomUUID().toString())));
 
       assertThrows(TimeoutException.class, () -> request.get(300, TimeUnit.MILLISECONDS));
       assertFalse(request.isDone());
@@ -105,7 +111,7 @@ class PointConcurrencyTest {
     try (HeldUserLock ignored = holdUserLock(userId)) {
       Future<PointChargeResult> request =
           requestExecutor.submit(
-              () -> pointService.charge(command(otherUserId, 100L, UUID.randomUUID().toString())));
+              () -> pointFacade.charge(command(otherUserId, 100L, UUID.randomUUID().toString())));
 
       assertEquals(200, request.get(2, TimeUnit.SECONDS).httpStatus());
       assertEquals(100L, balance(otherUserId));
@@ -129,7 +135,14 @@ class PointConcurrencyTest {
     assertTrue(results.stream().allMatch(result -> result.httpStatus() == 200));
     assertTrue(
         results.stream()
-            .allMatch(result -> result.body().get("data").get("balance").longValue() == 100L));
+            .allMatch(
+                result ->
+                    responseJsonCodec
+                            .read(result.responseBody())
+                            .get("data")
+                            .get("balance")
+                            .longValue()
+                        == 100L));
     assertEquals(100L, balance(userId));
     assertEquals(1L, idempotencyCount(userId));
   }
@@ -143,7 +156,7 @@ class PointConcurrencyTest {
 
     Set<String> resultCodes =
         results.stream()
-            .map(result -> result.body().get("code").stringValue())
+            .map(result -> responseJsonCodec.read(result.responseBody()).get("code").stringValue())
             .collect(Collectors.toSet());
     assertEquals(Set.of("POINT_CHARGED", "IDEMPOTENCY_KEY_REUSED"), resultCodes);
     assertTrue(Set.of(100L, 200L).contains(balance(userId)));
@@ -162,7 +175,7 @@ class PointConcurrencyTest {
                       executor.submit(
                           () -> {
                             assertTrue(start.await(2, TimeUnit.SECONDS));
-                            return pointService.charge(command);
+                            return pointFacade.charge(command);
                           }))
               .toList();
       start.countDown();
@@ -210,8 +223,7 @@ class PointConcurrencyTest {
   }
 
   private ChargeCommand command(long targetUserId, long amount, String idempotencyKey) {
-    return ChargeCommand.from(
-        new ChargeRequest(targetUserId, BigInteger.valueOf(amount)), idempotencyKey);
+    return ChargeCommand.from(targetUserId, BigInteger.valueOf(amount), idempotencyKey);
   }
 
   private void insertUser(long targetUserId, long balance) {
