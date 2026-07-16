@@ -11,13 +11,21 @@ import org.springframework.web.bind.annotation.RestController;
 class MenuController {
 
   private final MenuService menuService;
+  private final PopularMenuService popularMenuService;
 
-  MenuController(MenuService menuService) {
+  MenuController(MenuService menuService, PopularMenuService popularMenuService) {
     this.menuService = menuService;
+    this.popularMenuService = popularMenuService;
   }
 
   @GetMapping
   ApiResponse<List<MenuResponse>> findAll() {
     return ApiResponse.success("MENUS_RETRIEVED", "메뉴 목록을 조회했습니다.", menuService.findAll());
+  }
+
+  @GetMapping("/popular")
+  ApiResponse<List<PopularMenuResponse>> findPopular() {
+    return ApiResponse.success(
+        "POPULAR_MENUS_RETRIEVED", "인기 메뉴를 조회했습니다.", popularMenuService.findPopular());
   }
 }
