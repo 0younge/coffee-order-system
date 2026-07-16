@@ -62,7 +62,7 @@
 1. 구현: [OutboxDeliveryFacade.java](../src/main/java/com/example/coffeeordersystem/outbox/application/OutboxDeliveryFacade.java), [Outbox domain](../src/main/java/com/example/coffeeordersystem/outbox/domain), [OutboxWorker.java](../src/main/java/com/example/coffeeordersystem/outbox/infrastructure/OutboxWorker.java), [OutboxStore.java](../src/main/java/com/example/coffeeordersystem/outbox/infrastructure/OutboxStore.java), [OutboxHttpSender.java](../src/main/java/com/example/coffeeordersystem/outbox/infrastructure/OutboxHttpSender.java)
 2. 테스트: `UT-OUTBOX-001`~`004`, `IT-OUTBOX-001`·`002`·`004`, `EXT-OUTBOX-001`~`009`, `CT-OUTBOX-001`~`002`, Outbox 관측성과 구조 경계 — [OutboxDeliveryFacadeTest.java](../src/test/java/com/example/coffeeordersystem/outbox/application/OutboxDeliveryFacadeTest.java), [Outbox domain 테스트](../src/test/java/com/example/coffeeordersystem/outbox/domain), [Outbox infrastructure 테스트](../src/test/java/com/example/coffeeordersystem/outbox/infrastructure), [LayeredArchitectureTest.java](../src/test/java/com/example/coffeeordersystem/quality/LayeredArchitectureTest.java)
 3. 실행: 2026-07-17 MySQL 8.4 healthy와 Mock HTTP API에서 직접 관련 테스트 43개 성공, 실패·제외 0개. `./gradlew clean check build` 성공; 전체 114개, 성공 114개, 실패·오류·제외 0개. `./gradlew bootRun` 시작과 `GET /actuator/health`의 `UP`을 확인했다.
-4. 재현 커밋: `0af5685`(Outbox 전달 계층과 구조·회귀 테스트); GitHub 작업 이슈 `#31`
+4. 재현 커밋: `0af5685`(Outbox 전달 계층과 구조·회귀 테스트), `5392f74`(문서 추적성), `da36903`(전송 실패 해석의 Infrastructure 격리와 domain 구조 규칙); GitHub 작업 이슈 `#31`
 
 ### 기반선 검증 증거 (GitHub #1)
 
