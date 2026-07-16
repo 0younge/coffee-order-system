@@ -56,8 +56,6 @@ public class Order {
     if (userId <= 0
         || menuId <= 0
         || menuNameSnapshot == null
-        || menuNameSnapshot.isBlank()
-        || menuNameSnapshot.length() > 100
         || paidAmount <= 0
         || paidAt == null) {
       throw new IllegalArgumentException("결제 완료 주문 값이 유효하지 않습니다.");
