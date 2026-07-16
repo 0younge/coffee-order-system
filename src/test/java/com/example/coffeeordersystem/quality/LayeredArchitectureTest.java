@@ -422,6 +422,14 @@ class LayeredArchitectureTest {
     assertThrows(
         AssertionError.class,
         () -> verifyControllerDoesNotUsePersistence(controller, persistenceTypes));
+    SourceFile mvcControllerWithJdbc =
+        syntheticSource(
+            "menu/api/MvcController.java",
+            "@org.springframework.stereotype.Controller class MvcController {"
+                + " void query(org.springframework.jdbc.core.JdbcTemplate jdbcTemplate) {} }");
+    assertThrows(
+        AssertionError.class,
+        () -> verifyControllerDoesNotUsePersistence(mvcControllerWithJdbc, persistenceTypes));
   }
 
   @Test
@@ -526,7 +534,7 @@ class LayeredArchitectureTest {
 
   private void verifyControllerDoesNotUsePersistence(
       SourceFile source, Set<String> persistenceTypes) {
-    if (!hasAnnotation(source.contents(), "RestController")) {
+    if (!hasAnyAnnotation(source.contents(), "RestController", "Controller")) {
       return;
     }
     assertFalse(
