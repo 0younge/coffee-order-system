@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -19,6 +21,7 @@ class TraceabilityTest {
   private static final Pattern MARKDOWN_LINK = Pattern.compile("\\[[^]]+]\\(([^)]+)\\)");
   private static final Pattern REQUIREMENT_ID = Pattern.compile("(?:FR|NFR)-[0-9]{2}");
   private static final Pattern TEST_ID = Pattern.compile("[A-Z]{2,4}-[A-Z]+-[0-9]{3}");
+  private static final Pattern DISPLAY_NAME = Pattern.compile("@DisplayName\\(\"([^\"]+)\"\\)");
 
   @Test
   @DisplayName("QT-TRACE-001 README·요구사항·ADR·테스트 ID의 참조가 끊기지 않는다")
@@ -29,15 +32,8 @@ class TraceabilityTest {
     String traceability = Files.readString(Path.of("docs/requirements-traceability.md"));
 
     verifyReadmeLinks(readme);
-    assertTrue(findIds(traceability, REQUIREMENT_ID).containsAll(findIds(prd, REQUIREMENT_ID)));
-
-    try (var paths = Files.list(Path.of("docs/adr"))) {
-      for (Path adr :
-          paths.filter(path -> path.getFileName().toString().matches("[0-9]{4}.*\\.md")).toList()) {
-        assertTrue(
-            traceability.contains("./adr/" + adr.getFileName()), adr + "가 요구사항 추적표에 연결되어야 합니다.");
-      }
-    }
+    assertEquals(requirementHeadings(prd), requirementRows(traceability));
+    assertEquals(adrFiles(), adrLinks(traceability));
 
     Set<String> documentedTestIds = findIds(testStrategy, TEST_ID);
     Set<String> implementedTestIds = implementedTestIds();
@@ -88,10 +84,58 @@ class TraceabilityTest {
     try (var paths = Files.walk(Path.of("src/test/java"))) {
       Set<String> ids = new HashSet<>();
       for (Path path : paths.filter(file -> file.toString().endsWith(".java")).toList()) {
-        ids.addAll(findIds(Files.readString(path), TEST_ID));
+        Matcher displayNames = DISPLAY_NAME.matcher(Files.readString(path));
+        while (displayNames.find()) {
+          ids.addAll(findIds(displayNames.group(1), TEST_ID));
+        }
       }
       return Set.copyOf(ids);
     }
+  }
+
+  private List<String> requirementHeadings(String prd) {
+    return sortedIds(
+        prd.lines().filter(line -> line.matches("^#+\\s+(?:FR|NFR)-[0-9]{2}.*")).toList());
+  }
+
+  private List<String> requirementRows(String traceability) {
+    return sortedIds(
+        traceability
+            .lines()
+            .filter(line -> line.matches("^\\| \\[(?:FR|NFR)-[0-9]{2}].*"))
+            .toList());
+  }
+
+  private List<String> sortedIds(List<String> lines) {
+    List<String> ids = new ArrayList<>();
+    for (String line : lines) {
+      Matcher matcher = REQUIREMENT_ID.matcher(line);
+      if (matcher.find()) {
+        ids.add(matcher.group());
+      }
+    }
+    return ids.stream().sorted().toList();
+  }
+
+  private Set<String> adrFiles() throws IOException {
+    try (var paths = Files.list(Path.of("docs/adr"))) {
+      return paths
+          .filter(path -> path.getFileName().toString().matches("[0-9]{4}.*\\.md"))
+          .map(path -> "./adr/" + path.getFileName())
+          .collect(Collectors.toUnmodifiableSet());
+    }
+  }
+
+  private Set<String> adrLinks(String traceability) {
+    Set<String> links = new HashSet<>();
+    Matcher matcher = MARKDOWN_LINK.matcher(traceability);
+    while (matcher.find()) {
+      String destination = matcher.group(1).split("#", 2)[0];
+      if (destination.startsWith("./adr/") && !destination.equals("./adr/")) {
+        links.add(destination);
+      }
+    }
+    return Set.copyOf(links);
   }
 
   private Set<String> findIds(String text, Pattern pattern) {
