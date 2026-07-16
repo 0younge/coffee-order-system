@@ -132,7 +132,6 @@ com.example.coffeeordersystem
 │   └── infrastructure
 ├── idempotency
 │   ├── application
-│   ├── domain
 │   └── infrastructure
 └── outbox
     ├── application
