@@ -18,9 +18,14 @@ class HarnessConfigurationTest {
     String claude = Files.readString(Path.of("CLAUDE.md"));
     String context = Files.readString(Path.of("docs/context.md"));
     String architecture = Files.readString(Path.of("docs/architecture.md"));
+    Path claudeAutodev = Path.of(".claude/skills/autodev");
 
     assertTrue(agents.lines().count() <= 100, "AGENTS.md는 탐색성을 위해 100줄 이하여야 합니다.");
     assertTrue(claude.contains("@AGENTS.md"), "CLAUDE.md는 AGENTS.md 포인터를 유지해야 합니다.");
+    assertTrue(Files.isSymbolicLink(claudeAutodev), "Claude도 autodev 스킬을 발견해야 합니다.");
+    assertTrue(
+        Files.readSymbolicLink(claudeAutodev).equals(Path.of("../../.agents/skills/autodev")),
+        "Claude autodev 포인터는 공용 스킬 정본을 가리켜야 합니다.");
     assertFalse(agents.contains("Flyway·업무 기능은 아직 구현 전"));
     assertTrue(agents.contains("메뉴·포인트·주문·인기 메뉴 API와 Outbox 워커"));
     assertTrue(agents.contains("fresh MySQL CI"));
@@ -28,6 +33,10 @@ class HarnessConfigurationTest {
     assertTrue(agents.contains("`PT-*`는 제외"));
     assertFalse(architecture.contains("Flyway 파일 구성은 구현 시 정"));
     assertFalse(architecture.contains("구현 시 코드와 함께 확정"));
+    assertFalse(architecture.contains("사용자가 존재하지 않으면 거절한다.\n2. DB 트랜잭션"));
+    assertFalse(architecture.contains("기존 사용자를 확인한 뒤 아래 트랜잭션을 시작한다"));
+    assertTrue(architecture.contains("사용자는 충전 트랜잭션의 첫 `FOR UPDATE` 조회로 확인"));
+    assertTrue(architecture.contains("기존 사용자는 아래 트랜잭션의 첫 `FOR UPDATE` 조회로 확인"));
     assertLockBeforeIdempotency(section(context, "### 포인트 충전", "### 주문 및 결제"));
     assertLockBeforeIdempotency(section(context, "### 주문 및 결제", "### 외부 이벤트 전달"));
     assertTrue(

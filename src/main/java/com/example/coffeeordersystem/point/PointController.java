@@ -20,7 +20,10 @@ class PointController {
     this.pointService = pointService;
   }
 
-  @PostMapping(path = "/charge", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @PostMapping(
+      path = "/charge",
+      consumes = MediaType.APPLICATION_JSON_VALUE,
+      produces = MediaType.APPLICATION_JSON_VALUE)
   ResponseEntity<JsonNode> charge(
       @RequestHeader("Idempotency-Key") String idempotencyKey,
       @Valid @RequestBody ChargeRequest request) {

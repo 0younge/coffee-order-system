@@ -67,7 +67,7 @@
 
 HTTP 상태 코드는 본문 코드와 별개로 의미에 맞게 사용하며, 클라이언트는 `code`로 구체적인 결과를 구분합니다.
 
-정의되지 않은 경로의 `404 RESOURCE_NOT_FOUND`와 지원하지 않는 메서드의 `405 METHOD_NOT_ALLOWED`도 같은 실패 봉투를 사용합니다. `405`는 해당 경로가 지원하는 메서드를 `Allow` 헤더로 함께 반환합니다. 요청의 `Accept`가 `application/json`을 허용하지 않아 발생한 `406 Not Acceptable`은 JSON 오류 본문 자체를 협상할 수 없으므로 공통 봉투의 유일한 예외이며 `Content-Type`과 본문 없이 반환합니다.
+정의되지 않은 경로의 `404 RESOURCE_NOT_FOUND`와 지원하지 않는 메서드의 `405 METHOD_NOT_ALLOWED`도 같은 실패 봉투를 사용합니다. `405`는 해당 경로가 지원하는 메서드를 `Allow` 헤더로 함께 반환합니다. 요청의 `Accept`가 `application/json`을 허용하지 않아 발생한 `406 Not Acceptable`은 JSON 오류 본문 자체를 협상할 수 없으므로 공통 봉투의 유일한 예외이며 `Content-Type`과 본문 없이 반환합니다. 응답 협상은 업무 핸들러 실행 전에 끝내므로 `406` 요청은 포인트·주문·멱등·Outbox 상태를 변경하지 않습니다.
 
 ## 3. API 목록
 
@@ -248,6 +248,7 @@ Idempotency-Key: 9324b129-5cc7-4fb2-8b8d-8a3c48617453
 ### 집계 계약
 
 - 구간은 `[조회 시각 - 7일, 조회 시각)`입니다.
+- 주문 시각은 MySQL의 microsecond 정밀도로 저장되므로 더 세밀한 조회 시각은 두 경계를 다음 microsecond로 올림합니다. 정확히 microsecond인 경계는 그대로 유지합니다.
 - 하한은 포함하고 상한은 제외합니다.
 - 구간 안의 `orders.status = PAID`인 주문 수를 `menuId`별로 집계합니다.
 - 주문 수 내림차순, 동률이면 `menuId` 오름차순으로 정렬해 최대 3개를 반환합니다.
@@ -342,11 +343,11 @@ JSON 원문, 공백과 필드 순서는 요청 해시 입력에 포함하지 않
 
 오류 응답의 `success`는 `false`, `data`는 `null`입니다. 예상하지 못한 오류의 내부 예외·SQL·자격 증명을 응답에 노출하지 않습니다.
 
-`406 Not Acceptable`은 위 오류 코드 표와 공통 봉투의 예외로, `Content-Type`과 본문 없이 반환합니다.
+`406 Not Acceptable`은 위 오류 코드 표와 공통 봉투의 예외로, `Content-Type`과 본문 없이 반환합니다. 충전·주문에서는 업무 처리 전에 반환해 어떤 상태도 변경하지 않습니다.
 
 ## 10. 외부 데이터 수집 API 계약
 
-수신 시스템은 이 저장소에서 구현하지 않으며 통합 테스트에서는 JDK Mock HTTP API로 대체합니다. base URL은 기본값 없는 `COLLECTION_API_BASE_URL` 환경 변수로 주입합니다. HTTP(S) URL의 명시 포트는 `1~65535`만 허용하고 기존 path를 버리지 않은 채 그 뒤에 `events/orders`를 결합합니다. 누락되거나 잘못되면 애플리케이션 시작이 실패하며 현재 범위에서는 별도 자격 증명 헤더를 전송하지 않습니다.
+수신 시스템은 이 저장소에서 구현하지 않으며 통합 테스트에서는 JDK Mock HTTP API로 대체합니다. base URL은 기본값 없는 `COLLECTION_API_BASE_URL` 환경 변수로 주입합니다. HTTP(S) URL의 명시 포트는 `1~65535`만 허용하고 기존 path를 버리지 않은 채 그 뒤에 `events/orders`를 결합합니다. Outbox 워커가 활성화된 경우 누락되거나 잘못되면 애플리케이션 시작이 실패하며 현재 범위에서는 별도 자격 증명 헤더를 전송하지 않습니다.
 
 ### 요청
 

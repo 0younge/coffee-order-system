@@ -231,6 +231,18 @@ class PointApiTest {
             userId));
   }
 
+  @Test
+  @DisplayName("AT-CONTRACT-004 JSON을 거절한 충전 요청은 상태를 변경하기 전에 406을 반환한다")
+  void rejectsUnacceptableResponseBeforeCharge() throws Exception {
+    mockMvc
+        .perform(charge(UUID.randomUUID().toString(), body("100")).accept(MediaType.TEXT_PLAIN))
+        .andExpect(status().isNotAcceptable())
+        .andExpect(content().string(""));
+
+    assertEquals(100L, balance());
+    assertEquals(0L, idempotencyCount());
+  }
+
   private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder charge(
       String idempotencyKey, String body) {
     return post("/api/v1/points/charge")

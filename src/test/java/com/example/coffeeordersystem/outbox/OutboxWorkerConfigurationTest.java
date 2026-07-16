@@ -69,11 +69,24 @@ class OutboxWorkerConfigurationTest {
   @DisplayName("QT-CONFIG-001 워커 활성화 시 외부 주소 누락·오류로 시작에 실패한다")
   void requiresValidBaseUrlOnlyWhenWorkerIsEnabled() {
     ApplicationContextRunner runner =
-        new ApplicationContextRunner().withUserConfiguration(OutboxWorkerConfiguration.class);
+        new ApplicationContextRunner()
+            .withUserConfiguration(
+                OutboxWorkerEnabledConfiguration.class, OutboxWorkerConfiguration.class);
 
     runner.run(context -> assertNotNull(context.getStartupFailure()));
     runner
         .withPropertyValues("COLLECTION_API_BASE_URL=ftp://localhost")
+        .run(context -> assertNotNull(context.getStartupFailure()));
+    runner
+        .withPropertyValues("outbox.worker.enabled=tru")
+        .run(context -> assertNotNull(context.getStartupFailure()));
+    runner
+        .withPropertyValues("outbox.worker.enabled=yes")
+        .run(context -> assertNotNull(context.getStartupFailure()));
+    new ApplicationContextRunner()
+        .withInitializer(new ConfigDataApplicationContextInitializer())
+        .withUserConfiguration(OutboxWorkerEnabledConfiguration.class)
+        .withPropertyValues("OUTBOX_WORKER_ENABLED=tru")
         .run(context -> assertNotNull(context.getStartupFailure()));
     new ApplicationContextRunner()
         .withInitializer(new ConfigDataApplicationContextInitializer())

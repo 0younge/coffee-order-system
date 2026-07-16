@@ -10,6 +10,26 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Configuration(proxyBeanMethods = false)
+class OutboxWorkerEnabledConfiguration {
+
+  @Bean
+  OutboxWorkerEnabledSetting outboxWorkerEnabledSetting(
+      @Value("${outbox.worker.enabled:true}") String rawEnabled) {
+    return OutboxWorkerEnabledSetting.parse(rawEnabled);
+  }
+}
+
+record OutboxWorkerEnabledSetting(boolean enabled) {
+
+  static OutboxWorkerEnabledSetting parse(String rawEnabled) {
+    if (!"true".equalsIgnoreCase(rawEnabled) && !"false".equalsIgnoreCase(rawEnabled)) {
+      throw new IllegalStateException("OUTBOX_WORKER_ENABLED는 true 또는 false여야 합니다.");
+    }
+    return new OutboxWorkerEnabledSetting(Boolean.parseBoolean(rawEnabled));
+  }
+}
+
+@Configuration(proxyBeanMethods = false)
 @EnableScheduling
 @ConditionalOnProperty(
     prefix = "outbox.worker",

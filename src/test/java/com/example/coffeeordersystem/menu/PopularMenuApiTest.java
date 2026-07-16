@@ -92,6 +92,28 @@ class PopularMenuApiTest {
   }
 
   @Test
+  @DisplayName("IT-POPULAR-001 nanosecond 조회 시각에서도 DB microsecond 반개구간을 지킨다")
+  void aggregatesNanosecondWindowAtDatabasePrecision() throws Exception {
+    Instant queryTime = Instant.parse("2026-07-16T12:00:00.123456499Z");
+    Instant fromFloor = queryTime.minus(7, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MICROS);
+    Instant fromCeil = fromFloor.plus(1, ChronoUnit.MICROS);
+    Instant toFloor = queryTime.truncatedTo(ChronoUnit.MICROS);
+    Instant toCeil = toFloor.plus(1, ChronoUnit.MICROS);
+    when(clock.instant()).thenReturn(queryTime);
+    insertOrder(firstMenuId, fromFloor);
+    insertOrder(firstMenuId, fromCeil);
+    insertOrder(firstMenuId + 1, toFloor);
+    insertOrder(firstMenuId + 1, toCeil);
+
+    mockMvc
+        .perform(get("/api/v1/menus/popular"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.length()").value(2))
+        .andExpect(jsonPath("$.data[0].orderCount").value(1))
+        .andExpect(jsonPath("$.data[1].orderCount").value(1));
+  }
+
+  @Test
   @DisplayName("IT-POPULAR-002 AT-POPULAR-002 주문 수와 동률 순서로 상위 3개를 반환한다")
   void returnsTopThreeWithDeterministicTies() throws Exception {
     insertOrders(firstMenuId + 3, 2);

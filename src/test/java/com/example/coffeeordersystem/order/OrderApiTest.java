@@ -378,6 +378,20 @@ class OrderApiTest {
             userId));
   }
 
+  @Test
+  @DisplayName("AT-CONTRACT-004 JSON을 거절한 주문 요청은 상태를 변경하기 전에 406을 반환한다")
+  void rejectsUnacceptableResponseBeforeOrder() throws Exception {
+    mockMvc
+        .perform(order(UUID.randomUUID().toString(), body(menuId)).accept(MediaType.TEXT_PLAIN))
+        .andExpect(status().isNotAcceptable())
+        .andExpect(content().string(""));
+
+    assertEquals(5_000L, balance());
+    assertEquals(0L, orderCount());
+    assertEquals(0L, outboxCount());
+    assertEquals(0L, idempotencyCount());
+  }
+
   private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder order(
       String idempotencyKey, String requestBody) {
     return post("/api/v1/orders")

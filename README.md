@@ -164,20 +164,20 @@ docker compose up -d --wait
 
 - Docker Compose에는 MySQL 서비스만 포함합니다. 애플리케이션 컨테이너는 만들지 않습니다.
 - 기본 개발 데이터베이스는 `coffee_order_system`, 테스트 데이터베이스는 `coffee_order_system_test`, 사용자명은 `coffee`입니다. DB 비밀번호에는 기본값이 없습니다.
-- 자동 구현은 멱등적인 `docker/mysql/init/01-create-test-database.sh`를 MySQL 초기화 디렉터리에 연결해 신규 볼륨에서 테스트 데이터베이스와 애플리케이션 사용자 권한을 자동 준비해야 합니다.
+- Compose는 멱등적인 `docker/mysql/init/01-create-test-database.sh`를 MySQL 초기화 디렉터리에 연결해 신규 볼륨에서 테스트 데이터베이스와 애플리케이션 사용자 권한을 자동 준비합니다.
 - 기존 볼륨에 테스트 데이터베이스가 없다면 구현된 초기화 스크립트를 `docker compose exec mysql bash /docker-entrypoint-initdb.d/01-create-test-database.sh`로 한 번 실행합니다. 이 절차는 데이터베이스와 권한을 멱등적으로 준비하며 볼륨이나 개발 데이터를 삭제하지 않습니다.
 - 기존 로컬 MySQL과의 충돌을 피하기 위해 기본 호스트 포트는 `3307`입니다.
 - 개발 데이터베이스 이름과 JDBC URL은 `DB_NAME`, `DB_URL`, 테스트 데이터베이스 이름과 JDBC URL은 `TEST_DB_NAME`, `TEST_DB_URL`로 재정의할 수 있습니다. 호스트 포트는 `DB_PORT`, 사용자명은 `DB_USERNAME`, 비밀번호는 `DB_PASSWORD`, MySQL root 비밀번호는 `DB_ROOT_PASSWORD`로 재정의합니다.
-- 외부 API 주소는 `COLLECTION_API_BASE_URL`로 주입하며 기본값이 없습니다. HTTP(S) URL의 명시 포트는 `1~65535`만 허용하고 기존 base path 뒤에 `events/orders`를 결합합니다. 누락되거나 잘못되면 애플리케이션 시작이 실패합니다.
-- Outbox 워커 활성화 여부는 `OUTBOX_WORKER_ENABLED`, 폴링 주기와 배치 크기는 `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`로 설정하며 기본값은 각각 `true`, `1000`, `50`입니다. 승인된 2초 최초 요청 계약을 지키기 위해 폴링 주기는 `1~1000ms`만 허용합니다.
+- 외부 API 주소는 `COLLECTION_API_BASE_URL`로 주입하며 기본값이 없습니다. HTTP(S) URL의 명시 포트는 `1~65535`만 허용하고 기존 base path 뒤에 `events/orders`를 결합합니다. Outbox 워커가 활성화된 경우 누락되거나 잘못되면 애플리케이션 시작이 실패합니다.
+- Outbox 워커 활성화 여부는 `OUTBOX_WORKER_ENABLED`, 폴링 주기와 배치 크기는 `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`로 설정하며 기본값은 각각 `true`, `1000`, `50`입니다. 활성화 값은 `true`·`false`만 허용합니다. 승인된 2초 최초 요청 계약을 지키기 위해 폴링 주기는 `1~1000ms`만 허용합니다.
 - 로컬에서는 저장소 루트의 `.env`를 Docker Compose와 Spring Boot가 함께 읽습니다. `.env`와 `.env.*`는 커밋하지 않고 키 목록과 안전한 예시만 `.env.example`로 관리합니다.
 - CI·운영에서는 `.env` 파일 대신 같은 이름의 시스템 환경 변수를 주입할 수 있으며, 시스템 환경 변수가 `.env` 값보다 우선합니다.
-- Flyway 구현 후 애플리케이션 시작 시 스키마, 초기 메뉴와 과제·로컬용 기준 사용자 `id=1`, `point_balance=0`을 적용합니다.
+- Flyway는 애플리케이션 시작 시 스키마, 초기 메뉴와 과제·로컬용 기준 사용자 `id=1`, `point_balance=0`을 적용합니다.
 - 통합 테스트는 인메모리 DB로 대체하지 않고 실제 MySQL과의 SQL·락·제약 조건 동작을 검증합니다.
 - 개발과 테스트는 같은 Compose MySQL 인스턴스를 사용하되 서로 다른 데이터베이스를 사용합니다. 일반 테스트에서는 Outbox 워커를 비활성화하고 Outbox 전용 테스트에서만 활성화합니다.
 - 로컬 테스트는 지속 볼륨으로 빠른 회귀를 확인하고, [GitHub Actions CI](./.github/workflows/ci.yml)는 매 실행 새 MySQL 8.4 서비스에서 V1부터 전체 Flyway와 `./gradlew clean check build`를 검증합니다. CI의 고정 DB 계정은 해당 일회성 테스트 서비스 전용 공개 값이며 저장소·운영 시크릿을 사용하지 않습니다.
 - 테스트는 고유 데이터만 FK 순서로 정리합니다. 전체 `TRUNCATE`, schema 삭제와 `Flyway clean`은 사용하지 않습니다.
-- 첫 자동 구현 완료 게이트에는 기능·동시성·외부 계약·품질 검사와 정상 조건의 Outbox 최초 요청 2초 검증을 포함합니다. `PT-*` 부하·성능 기준선은 기능 구현 후 별도 작업으로 측정합니다.
+- 완료 게이트에는 기능·동시성·외부 계약·품질 검사와 정상 조건의 Outbox 최초 요청 2초 검증을 포함합니다. `PT-*` 부하·성능 기준선은 별도 후속 작업으로 측정합니다.
 
 완료 판정 절차와 테스트 범위는 [테스트 전략](./docs/test-strategy.md)을 따릅니다.
 

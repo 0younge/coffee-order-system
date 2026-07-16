@@ -21,6 +21,17 @@ class PopularMenuWindowTest {
   }
 
   @Test
+  @DisplayName("UT-POPULAR-001 DB 정밀도 밖의 조회 경계는 다음 microsecond로 올림한다")
+  void ceilsNanosecondWindowToDatabasePrecision() {
+    Instant to = Instant.parse("2026-07-16T12:00:00.123456499Z");
+
+    PopularMenuWindow window = PopularMenuWindow.endingAt(to);
+
+    assertEquals(Instant.parse("2026-07-09T12:00:00.123457Z"), window.from());
+    assertEquals(Instant.parse("2026-07-16T12:00:00.123457Z"), window.to());
+  }
+
+  @Test
   @DisplayName("UT-POPULAR-002 정렬된 집계에 1부터 순위를 붙이고 최대 3개만 반환한다")
   void ranksAtMostThreeSortedAggregates() {
     List<PopularMenuResponse> responses =

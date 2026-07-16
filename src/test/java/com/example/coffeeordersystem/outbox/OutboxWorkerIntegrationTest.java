@@ -36,6 +36,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -46,6 +47,7 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest(properties = {"outbox.worker.enabled=true", "outbox.worker.batch-size=50"})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class OutboxWorkerIntegrationTest {
 
   private static final AtomicLong ID_SEQUENCE = new AtomicLong(9_000_000_000L);

@@ -20,7 +20,9 @@ class OrderController {
     this.orderService = orderService;
   }
 
-  @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+  @PostMapping(
+      consumes = MediaType.APPLICATION_JSON_VALUE,
+      produces = MediaType.APPLICATION_JSON_VALUE)
   ResponseEntity<JsonNode> place(
       @RequestHeader("Idempotency-Key") String idempotencyKey,
       @Valid @RequestBody OrderRequest request) {
