@@ -178,6 +178,7 @@ class PointApiTest {
             .andExpect(jsonPath("$.data").hasJsonPath())
             .andExpect(jsonPath("$.data").value(nullValue()))
             .andReturn();
+    jdbcTemplate.update("UPDATE users SET point_balance = 100 WHERE id = ?", userId);
     MvcResult replay =
         mockMvc
             .perform(charge(key, request))
@@ -188,9 +189,13 @@ class PointApiTest {
             .andExpect(jsonPath("$.data").value(nullValue()))
             .andReturn();
 
+    assertEquals(
+        "{\"code\":\"POINT_BALANCE_OVERFLOW\",\"data\":null,"
+            + "\"message\":\"포인트 잔액 범위를 초과합니다.\",\"success\":false}",
+        first.getResponse().getContentAsString());
     assertStoredResponseReused(first, replay);
 
-    assertEquals(Long.MAX_VALUE, balance());
+    assertEquals(100L, balance());
     assertEquals(1L, idempotencyCount());
     assertEquals(
         "POINT_BALANCE_OVERFLOW",

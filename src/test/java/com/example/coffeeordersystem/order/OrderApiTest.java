@@ -57,6 +57,8 @@ class OrderApiTest {
     when(clock.instant()).thenReturn(NANOSECOND_TIME);
     userId = ID_SEQUENCE.addAndGet(2);
     menuId = userId + 1;
+    jdbcTemplate.update(
+        "DELETE FROM menus WHERE id IN (?, ?)", menuId + 10_000L, menuId + 100_000L);
     insertUser(5_000L);
     insertMenu(menuId, "테스트 아메리카노", 4_000L);
   }
@@ -69,7 +71,8 @@ class OrderApiTest {
         userId);
     jdbcTemplate.update("DELETE FROM orders WHERE user_id = ?", userId);
     jdbcTemplate.update("DELETE FROM idempotency_records WHERE user_id = ?", userId);
-    jdbcTemplate.update("DELETE FROM menus WHERE id IN (?, ?)", menuId, menuId + 10_000L);
+    jdbcTemplate.update(
+        "DELETE FROM menus WHERE id IN (?, ?, ?)", menuId, menuId + 10_000L, menuId + 100_000L);
     jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
   }
 
@@ -293,9 +296,15 @@ class OrderApiTest {
     long missingMenuId = menuId + 100_000L;
     jdbcTemplate.update("UPDATE users SET point_balance = 0 WHERE id = ?", userId);
     MvcResult first = expectError(missingMenuKey, body(missingMenuId), 404, "MENU_NOT_FOUND");
+    insertMenu(missingMenuId, "나중에 추가된 메뉴", 1_000L);
+    jdbcTemplate.update("UPDATE users SET point_balance = ? WHERE id = ?", 5_000L, userId);
     MvcResult replay = expectError(missingMenuKey, body(missingMenuId), 404, "MENU_NOT_FOUND");
+    assertEquals(
+        "{\"code\":\"MENU_NOT_FOUND\",\"data\":null,"
+            + "\"message\":\"메뉴를 찾을 수 없습니다.\",\"success\":false}",
+        first.getResponse().getContentAsString());
     assertStoredResponseReused(first, replay);
-    assertEquals(0L, balance());
+    assertEquals(5_000L, balance());
     assertEquals(1L, idempotencyCount());
     assertEquals(0L, orderCount());
     assertEquals(0L, outboxCount());
@@ -308,10 +317,15 @@ class OrderApiTest {
     String key = UUID.randomUUID().toString();
 
     MvcResult first = expectError(key, body(menuId), 409, "INSUFFICIENT_POINT");
+    jdbcTemplate.update("UPDATE users SET point_balance = ? WHERE id = ?", 5_000L, userId);
     MvcResult replay = expectError(key, body(menuId), 409, "INSUFFICIENT_POINT");
+    assertEquals(
+        "{\"code\":\"INSUFFICIENT_POINT\",\"data\":null,"
+            + "\"message\":\"포인트 잔액이 부족합니다.\",\"success\":false}",
+        first.getResponse().getContentAsString());
     assertStoredResponseReused(first, replay);
 
-    assertEquals(3_999L, balance());
+    assertEquals(5_000L, balance());
     assertEquals(0L, orderCount());
     assertEquals(0L, outboxCount());
     assertEquals(1L, idempotencyCount());
