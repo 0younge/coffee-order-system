@@ -107,7 +107,7 @@ flowchart LR
 
 ## 6. 모듈러 모놀리스
 
-배포 단위와 데이터베이스는 하나로 유지하되, 코드는 기능을 먼저 나누고 기능 내부에서 책임을 분리한다. 아래는 ADR-0026이 승인한 목표 패키지 구조다. 2026-07-16 리팩토링 시작 기준선은 기능별 flat package이며, 물리적 이동과 구조 테스트의 구현 상태는 [요구사항 추적성](./requirements-traceability.md)에서 별도로 추적한다.
+배포 단위와 데이터베이스는 하나로 유지하되, 코드는 기능을 먼저 나누고 기능 내부에서 책임을 분리한다. 아래는 ADR-0026이 승인한 목표이자 2026-07-17 기능 경계 이동을 완료한 현재 패키지 구조다. 2026-07-16의 기능별 flat package 시작 기준선과 단계별 검증 증거는 [요구사항 추적성](./requirements-traceability.md)에서 별도로 추적한다.
 
 ```text
 com.example.coffeeordersystem
@@ -143,6 +143,10 @@ com.example.coffeeordersystem
 역할이 없는 빈 패키지는 만들지 않는다. 한 줄 클래스 하나를 옮기기 위한 물리적 분리보다 package-private 접근과 책임이 드러나는 이름이 더 읽기 쉬운 작은 기능은 패키지를 생략하고 실제 예외를 이 절에 기록한다.
 
 현재 Idempotency는 공개 선점·완료 계약과 요청 식별을 `application`, JdbcTemplate 저장과 DB JSON 정규화를 `infrastructure`에 둔다. 별도의 독자적 Entity·Value Object·계산 규칙이 없으므로 빈 `domain` 패키지는 만들지 않으며, 처리 상태 전이 불변식은 기존 조건부 UPDATE SQL과 DB 제약에 유지한다.
+
+`common`은 여러 기능이 공유하는 HTTP 응답 봉투와 정확한 멱등 응답 JSON codec을 `api`, 공개 오류와 HTTP 변환을 `error`, 요청 correlation·비즈니스 로그·DB 경합 지표를 `observability`에만 둔다. Common은 어떤 기능 패키지도 참조하지 않으며 범용 `Base*` 추상화를 만들지 않는다. `RequestLoggingFilter`처럼 외부 협력 계약이 아닌 HTTP 구현은 package-private로 유지한다. 기존 `ErrorCode`–`HttpStatus` 결합은 별도 매핑의 중복을 피하기 위해 승인된 예외로 유지한다.
+
+애플리케이션 전체가 공유하는 UTC `Clock` Bean 하나는 특정 기능이나 Common 책임으로 가장하지 않고 최상위 `config/TimeConfiguration`에 유지한다. 이 한 클래스의 소유권을 표현하기 위해 별도 계층이나 위임 타입을 늘리지 않는다.
 
 | 계층 | 책임 | 금지 경계 |
 |---|---|---|
