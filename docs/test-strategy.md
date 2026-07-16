@@ -4,7 +4,7 @@
 
 이 문서는 구현이 완료됐다고 주장하는 결과 보고서가 아니라, 구현 과정에서 요구사항 누락과 회귀를 막기 위한 **검증 계약**이다. 테스트 결과의 현재 상태와 요구사항별 증거는 [요구사항 추적표](./requirements-traceability.md)에서 관리한다.
 
-2026-07-16 기준으로 저장소에는 Spring Boot 애플리케이션 부트스트랩, 컨텍스트·`.env` 설정 테스트 두 건, MySQL Docker Compose와 DB 연결 설정이 있다. 도메인, API, DB 마이그레이션과 Outbox 워커는 아직 구현되지 않았다. 따라서 아래 `UT-*`, `IT-*`, `AT-*`, `EXT-*`, `CT-*`, `PT-*` 항목은 별도로 **현재 증거**라고 표시하지 않는 한 모두 구현할 테스트 계획이다. 테스트 이름이나 문서만 존재하는 것은 통과 증거로 보지 않는다.
+2026-07-16 기준으로 저장소에는 Spring Boot 애플리케이션 기반선, 개발·테스트 DB 분리, Flyway 스키마·기준 데이터, UTC·health·포맷 검증이 구현돼 있다. 업무 도메인·API와 Outbox 워커는 아직 구현 중이다. 따라서 아래 `UT-*`, `IT-*`, `AT-*`, `EXT-*`, `CT-*`, `PT-*` 항목은 [요구사항 추적성](./requirements-traceability.md)에 **현재 증거**가 연결되지 않은 경우 구현할 테스트 계획이다. 테스트 이름이나 문서만 존재하는 것은 통과 증거로 보지 않는다.
 
 완료 기준은 한 문장으로 다음과 같다.
 
@@ -51,10 +51,10 @@ ID 형식은 `<계층>-<영역>-<3자리 순번>`으로 고정한다. 예를 들
 |---|---|---|
 | Java | Amazon Corretto 17 호환 JDK | Gradle toolchain에 Java 17 지정 |
 | 애플리케이션 | Spring Boot 4.1.0, Gradle 9.5.1 | 빌드 기준선 존재 |
-| 데이터베이스 | Docker Compose의 MySQL 8.4 LTS, 개발·테스트 DB 분리 | 단일 개발 DB 접속만 구현; 테스트 DB 초기화·프로필 미구현 |
+| 데이터베이스 | Docker Compose의 MySQL 8.4 LTS, 개발·테스트 DB 분리 | 초기화 스크립트·테스트 프로필·Flyway migration 검증 완료 |
 | 애플리케이션 실행 | 호스트에서 `./gradlew bootRun` | MySQL 연결과 애플리케이션 시작 확인 |
 | 외부 수집 API | 테스트 프로세스가 제어하는 JDK Mock HTTP 서버 | 미구현 |
-| 저장 기준 시간 | UTC | 설정과 검증 미구현 |
+| 저장 기준 시간 | UTC | 주입 가능 `Clock`, 애플리케이션·JDBC·DB 설정과 비 UTC JVM 저장 검증 완료 |
 
 Docker Compose는 MySQL만 실행한다. 애플리케이션과 Gradle 테스트는 호스트에서 실행해 디버깅과 반복 시간을 단순하게 유지한다. 개발과 테스트는 하나의 Compose MySQL 인스턴스를 사용하되 개발용 `coffee_order_system`과 테스트용 `coffee_order_system_test`를 분리한다. 자동 구현은 멱등적인 `docker/mysql/init/01-create-test-database.sh`를 `/docker-entrypoint-initdb.d/01-create-test-database.sh`에 연결해 신규 볼륨에서 두 데이터베이스와 애플리케이션 사용자의 권한을 준비한다. 기존 볼륨에 테스트 데이터베이스가 없으면 `docker compose exec mysql bash /docker-entrypoint-initdb.d/01-create-test-database.sh`를 한 번 실행한다. 이 절차는 데이터베이스와 권한만 멱등적으로 준비하고 개발 데이터나 볼륨을 삭제하지 않는다. 테스트 프로필은 개발 URL을 상속하지 않고 테스트 JDBC URL을 명시한다. 각 테스트는 실행별 고유 식별자로 만든 자기 데이터만 FK 순서에 맞춰 정리하며 전체 `TRUNCATE`, schema 삭제와 `Flyway clean`을 사용하지 않는다. 빈 DB 마이그레이션은 CI나 새 Compose 볼륨에서 검증한다.
 
@@ -270,7 +270,7 @@ docker compose exec mysql bash /docker-entrypoint-initdb.d/01-create-test-databa
 - 신규 볼륨은 테스트 DB를 자동 생성한다. 기존 볼륨용 초기화 명령은 멱등적이며 실행해도 개발 데이터와 볼륨을 삭제하지 않는다.
 - `./gradlew test` 결과는 전체 테스트 수, 성공, 실패, 제외 수를 그대로 보고한다.
 - Spotless 구현 후 `./gradlew check`가 `spotlessCheck`와 테스트를 함께 실행한다. `spotlessApply`는 명시적으로만 실행하고 적용 뒤 전체 diff를 검토한다.
-- 현재 `bootRun`은 애플리케이션이 MySQL에 연결되어 시작되는지 확인한다. Flyway가 구현되면 migration 완료를, health endpoint가 구현되면 해당 응답까지 확인한다.
+- `bootRun`은 애플리케이션의 MySQL 연결, Flyway migration 완료와 `/actuator/health`의 `UP` 응답까지 확인한다.
 - 성능 기준선은 기능 테스트와 분리된 작업으로 실행해 일반 테스트의 안정성과 시간을 해치지 않는다.
 
 ## 10. 변경 완료 게이트

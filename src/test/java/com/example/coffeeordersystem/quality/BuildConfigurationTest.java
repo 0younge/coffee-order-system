@@ -19,6 +19,7 @@ class BuildConfigurationTest {
     String compose = Files.readString(Path.of("compose.yaml"));
     String application = Files.readString(Path.of("src/main/resources/application.yaml"));
     String testApplication = Files.readString(Path.of("src/test/resources/application-test.yaml"));
+    String environmentExample = Files.readString(Path.of(".env.example"));
 
     assertTrue(build.contains("org.springframework.boot' version '4.1.0'"));
     assertTrue(build.contains("JavaLanguageVersion.of(17)"));
@@ -26,6 +27,13 @@ class BuildConfigurationTest {
     assertTrue(compose.contains("image: mysql:8.4"));
     assertTrue(application.contains("connectionTimeZone=UTC"));
     assertTrue(testApplication.contains("connectionTimeZone=UTC"));
+    assertTrue(
+        environmentExample.contains(
+            "DB_URL=jdbc:mysql://localhost:3307/coffee_order_system?connectionTimeZone=UTC"));
+    assertTrue(
+        environmentExample.contains(
+            "TEST_DB_URL=jdbc:mysql://localhost:3307/coffee_order_system_test"
+                + "?connectionTimeZone=UTC"));
   }
 
   @Test
