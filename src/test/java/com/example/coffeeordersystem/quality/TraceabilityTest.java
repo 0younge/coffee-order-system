@@ -111,7 +111,8 @@ class TraceabilityTest {
                   excludedPolicies.contains(policyId.group())
                       ? "| 현재 범위 제외 |"
                       : inProgressPolicies.contains(policyId.group()) ? "| 구현 중 |" : "| 검증됨 |";
-              assertTrue(line.contains(expectedStatus), "현재 범위 정책 상태가 완료 또는 명시적 제외여야 합니다: " + line);
+              assertTrue(
+                  line.contains(expectedStatus), "현재 범위 정책 상태가 검증됨·구현 중 또는 명시적 제외여야 합니다: " + line);
             });
   }
 

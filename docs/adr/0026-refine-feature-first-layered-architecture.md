@@ -26,6 +26,8 @@ ADR-0006을 유지하고 다음 규칙으로 구체화한다.
 - 기존 `OrderService`와 `PointService`처럼 이미 유스케이스와 트랜잭션을 조정하는 클래스는 별도 위임 Facade를 추가하지 않고 각각 `OrderFacade`, `PointFacade`로 승격한다. 한 메서드를 그대로 Service에 전달하는 Facade는 만들지 않는다.
 - 메뉴 조회, 주문용 포인트 결제, 멱등성, Outbox 이벤트 추가와 전달은 책임이 드러나는 공개 Application 진입점을 제공한다. 인터페이스는 실제 기능 간 계약, 구현 교체점 또는 테스트 경계가 필요할 때만 사용한다.
 - API Request·Response와 Application Command·Result를 분리하고 API Response를 기능 간 계약으로 재사용하지 않는다. 최초 HTTP 상태와 응답 본문을 그대로 저장·재사용하는 멱등 계약은 전용 codec 또는 assembler 경계로 격리한다.
+- `OutboxStore`의 claim·publish·fail SQL과 트랜잭션 상태 전이는 정합성을 함께 보장하는 Infrastructure 응집 단위로 유지하고 계층 모양만 맞추기 위해 임의로 분해하지 않는다.
+- 기존 `ErrorCode`와 `HttpStatus` 결합을 제거하는 일이 더 많은 매핑과 중복을 만들면 이번 리팩토링에서 억지로 분리하지 않는다.
 - 물리적 분리가 오히려 가독성을 떨어뜨리는 작은 기능은 빈 패키지나 한 줄 타입을 만들지 않고 package-private와 명명 규칙을 사용할 수 있으며, 예외를 구조 문서에 기록한다.
 - JUnit과 JDK 파일 API로 의존 방향, Controller→Facade, 기능 간 Application-only 협력과 순환 부재를 검증한다. ArchUnit과 Spring Modulith는 도입하지 않는다.
 
