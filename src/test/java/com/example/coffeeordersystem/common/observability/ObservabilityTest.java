@@ -136,6 +136,7 @@ class ObservabilityTest {
         .andExpect(jsonPath("$.status").value("UP"))
         .andExpect(jsonPath("$.components").doesNotExist())
         .andExpect(jsonPath("$.details").doesNotExist());
+    mockMvc.perform(get("/actuator")).andExpect(status().isNotFound());
     mockMvc.perform(get("/actuator/metrics")).andExpect(status().isNotFound());
     mockMvc
         .perform(get("/api/v1/not-defined"))
@@ -145,6 +146,7 @@ class ObservabilityTest {
 
     assertEquals("health", environment.getProperty("management.endpoints.web.exposure.include"));
     assertEquals("never", environment.getProperty("management.endpoint.health.show-details"));
+    assertEquals("false", environment.getProperty("management.endpoints.web.discovery.enabled"));
     assertTrue(meterRegistry.find("http.server.requests").meters().iterator().hasNext());
     assertTrue(
         meterRegistry.getMeters().stream()

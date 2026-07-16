@@ -52,10 +52,19 @@ class OutboxWorkerTest {
 
     worker.poll();
 
-    assertTrue(output.getAll().contains("errorType=\"IllegalStateException\""));
-    assertTrue(output.getAll().contains("eventId=\"event-1\""));
-    assertTrue(output.getAll().contains("attempt=\"1\""));
-    assertTrue(output.getAll().contains("result=\"state_update_failed\""));
+    String failureLog =
+        output
+            .getAll()
+            .lines()
+            .filter(line -> line.contains("Outbox 이벤트 결과 반영 실패"))
+            .findFirst()
+            .orElseThrow();
+    assertTrue(failureLog.contains("errorType=\"IllegalStateException\""));
+    assertTrue(failureLog.contains("eventId=\"event-1\""));
+    assertTrue(failureLog.contains("attempt=\"1\""));
+    assertTrue(failureLog.contains("target=\"/events/orders\""));
+    assertTrue(failureLog.contains("latencyMs="));
+    assertTrue(failureLog.contains("result=\"state_update_failed\""));
     assertFalse(output.getAll().contains("SQL error"));
     assertFalse(output.getAll().contains("top-secret"));
   }

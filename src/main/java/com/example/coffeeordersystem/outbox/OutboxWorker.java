@@ -131,6 +131,10 @@ class OutboxWorker {
                 log.atWarn()
                     .addKeyValue("eventId", claim.eventId())
                     .addKeyValue("attempt", claim.attempt())
+                    .addKeyValue("target", "/events/orders")
+                    .addKeyValue(
+                        "latencyMs",
+                        java.time.Duration.ofNanos(System.nanoTime() - startedAt).toMillis())
                     .addKeyValue("result", "state_update_failed")
                     .addKeyValue("errorType", cause.getClass().getSimpleName())
                     .log("Outbox 이벤트 결과 반영 실패");

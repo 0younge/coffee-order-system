@@ -35,6 +35,8 @@ management:
       show-details: never
   endpoints:
     web:
+      discovery:
+        enabled: false
       exposure:
         include: health
 

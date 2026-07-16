@@ -71,7 +71,8 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(NoResourceFoundException.class)
   public ResponseEntity<?> handleNoResourceFound(
       NoResourceFoundException exception, HttpServletRequest request) {
-    if (request.getRequestURI().startsWith("/actuator/")) {
+    String requestUri = request.getRequestURI();
+    if (requestUri.equals("/actuator") || requestUri.startsWith("/actuator/")) {
       return ResponseEntity.notFound().build();
     }
     return handleUnexpectedException(exception);
