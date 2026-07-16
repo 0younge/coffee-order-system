@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:mysql://localhost:${DB_PORT:3307}/${TEST_DB_NAME:coffee_order_system_test}}
+    username: ${DB_USERNAME:coffee}
+    password: ${DB_PASSWORD}
+  flyway:
+    enabled: true
+
+outbox:
+  worker:
+    enabled: false

@@ -6,10 +6,14 @@ services:
       MYSQL_USER: ${DB_USERNAME:-coffee}
       MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD must be set}
+      TEST_DB_NAME: ${TEST_DB_NAME:-coffee_order_system_test}
+      TZ: UTC
+    command: ["--default-time-zone=+00:00"]
     ports:
       - "${DB_PORT:-3307}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init/01-create-test-database.sh:/docker-entrypoint-initdb.d/01-create-test-database.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
       interval: 5s
