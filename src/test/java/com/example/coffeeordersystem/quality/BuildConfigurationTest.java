@@ -101,6 +101,8 @@ class BuildConfigurationTest {
     assertTrue(workflow.contains("- 3306:3306"));
     assertTrue(workflow.contains("TEST_DB_URL: \"jdbc:mysql://localhost:3306/"));
     assertTrue(workflow.contains("sessionVariables=time_zone='%2B00:00'"));
+    assertTrue(workflow.contains("uses: actions/checkout@v6"));
+    assertTrue(workflow.contains("uses: actions/setup-java@v5"));
     assertTrue(workflow.contains("./gradlew clean check build"));
     assertFalse(workflow.contains("secrets."));
     assertFalse(workflow.contains("if: false"));
