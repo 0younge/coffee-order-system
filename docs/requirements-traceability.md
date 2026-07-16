@@ -4,7 +4,7 @@
 
 이 문서는 [PRD](./prd.md)의 기능·비기능 요구사항이 설계, API, ADR, 구현, 테스트에서 빠지지 않았는지 추적하는 작업대장이다. 설계 문서가 상세하더라도 실행 가능한 코드와 통과한 테스트가 없으면 구현 증거로 간주하지 않는다.
 
-2026-07-16 현재 애플리케이션 기반선, MySQL 스키마, 메뉴 조회, 포인트 충전, 주문·결제, 인기 메뉴 조회, Outbox 전달, 관측성·엄격한 API 계약과 다중 인스턴스 교차 경계는 구현·검증됐다. 아래 테스트 ID 중 실행 증거에 연결되지 않은 항목은 아직 **계획 식별자**이며, 테스트 소스와 통과 결과가 생기기 전까지 검증 증거가 아니다.
+2026-07-16 현재 애플리케이션 기반선, MySQL 스키마, 메뉴 조회, 포인트 충전, 주문·결제, 인기 메뉴 조회, Outbox 전달, 관측성·엄격한 API 계약과 다중 인스턴스 교차 경계는 구현·검증됐다. 기능 우선 계층형 구조와 제한된 Lombok 정책은 승인됐고 실제 패키지 이동·구조 테스트·빌드 반영은 구현 중이다. 아래 테스트 ID 중 실행 증거에 연결되지 않은 항목은 아직 **계획 식별자**이며, 테스트 소스와 통과 결과가 생기기 전까지 검증 증거가 아니다.
 
 ### 구현 상태
 
@@ -37,10 +37,18 @@
 | 애플리케이션 시작점 | 검증됨 | [CoffeeOrderSystemApplication.java](../src/main/java/com/example/coffeeordersystem/CoffeeOrderSystemApplication.java), UTC `Clock`, health 최소 공개, 조건부 Outbox 워커와 관측 로그·지표, 독립 웹 Context의 공용 DB 처리; [#1 증거](#기반선-검증-증거-github-1), [#6 증거](#outbox-전달-검증-증거-github-6), [#7 증거](#관측성과-api-계약-검증-증거-github-7), [#8 증거](#다중-인스턴스와-추적성-검증-증거-github-8) | 없음 |
 | Spring context·설정 테스트 | 검증됨 | MySQL 기반 전체 103개 테스트; [#1 증거](#기반선-검증-증거-github-1), [#2 증거](#메뉴-api-검증-증거-github-2), [#3 증거](#포인트-충전-검증-증거-github-3), [#4 증거](#주문결제-검증-증거-github-4), [#5 증거](#인기-메뉴-검증-증거-github-5), [#6 증거](#outbox-전달-검증-증거-github-6), [#7 증거](#관측성과-api-계약-검증-증거-github-7), [#8 증거](#다중-인스턴스와-추적성-검증-증거-github-8), [#9 증거](#최종-통합-검증-증거-github-9), [#12 증거](#outbox-설정-경계-검증-증거-github-12), [#13 증거](#outbox-워커-복구와-배치-선점-검증-증거-github-13), [#14 증거](#http-오류-응답-검증-증거-github-14), [#15 증거](#주문-시각-정밀도-검증-증거-github-15), [#16 증거](#fresh-mysql-ci-검증-증거-github-16), [#17 증거](#문서와-하네스-동기화-검증-증거-github-17), [#18 증거](#최종-전체-리뷰-검증-증거-github-18) | 없음 |
 | 기능 구현 | 검증됨 | 공통 HTTP 응답 경계, Menu·Popular Menu 조회, Point 충전·Idempotency, Order 결제·Outbox 원자 저장과 분산 전달 구현·검증 완료 | 현재 승인 기능 없음 |
+| 기능 우선 계층·Lombok 리팩토링 | 구현 중 | [ADR-0026](./adr/0026-refine-feature-first-layered-architecture.md), [ADR-0027](./adr/0027-use-lombok-with-restrictions.md), GitHub 추적 이슈 `#19`, [#20 기준선](#구조-리팩토링-기준선-증거-github-20) | feature-first 패키지 이동, Facade 공개 경계, 제한된 Lombok 빌드·소스 적용과 `QT-ARCH-001`·`QT-LOMBOK-001` 실행 증거 |
 | 데이터베이스 | 검증됨 | [V1 migration](../src/main/resources/db/migration/V1__create_schema_and_seed_reference_data.sql), [V2 migration](../src/main/resources/db/migration/V2__make_lifecycle_codes_case_sensitive.sql), [V3 migration](../src/main/resources/db/migration/V3__optimize_outbox_claim.sql), [DatabaseMigrationTest.java](../src/test/java/com/example/coffeeordersystem/database/DatabaseMigrationTest.java), [OutboxStore.java](../src/main/java/com/example/coffeeordersystem/outbox/OutboxStore.java); [#1 증거](#기반선-검증-증거-github-1), [#6 증거](#outbox-전달-검증-증거-github-6), [#13 증거](#outbox-워커-복구와-배치-선점-검증-증거-github-13), [#16 증거](#fresh-mysql-ci-검증-증거-github-16) | 없음 |
 | 검증 자동화 | 검증됨 | 테스트 DB·워커 격리, Spotless `check` 연결, MySQL·Mock HTTP·독립 웹 Context 기반 전체 103개 테스트와 문서 링크·ID·현재 범위 상태 검사; [#1 증거](#기반선-검증-증거-github-1), [#2 증거](#메뉴-api-검증-증거-github-2), [#3 증거](#포인트-충전-검증-증거-github-3), [#4 증거](#주문결제-검증-증거-github-4), [#5 증거](#인기-메뉴-검증-증거-github-5), [#6 증거](#outbox-전달-검증-증거-github-6), [#7 증거](#관측성과-api-계약-검증-증거-github-7), [#8 증거](#다중-인스턴스와-추적성-검증-증거-github-8), [#9 증거](#최종-통합-검증-증거-github-9), [#12 증거](#outbox-설정-경계-검증-증거-github-12), [#13 증거](#outbox-워커-복구와-배치-선점-검증-증거-github-13), [#14 증거](#http-오류-응답-검증-증거-github-14), [#15 증거](#주문-시각-정밀도-검증-증거-github-15), [#16 증거](#fresh-mysql-ci-검증-증거-github-16), [#17 증거](#문서와-하네스-동기화-검증-증거-github-17), [#18 증거](#최종-전체-리뷰-검증-증거-github-18) | 없음 |
 
 이 기준선은 문서상의 목표와 실제 저장소 상태를 분리하기 위한 것이다. 구현이 추가되면 아래 표의 상태와 증거를 같은 변경에서 갱신한다.
+
+### 구조 리팩토링 기준선 증거 (GitHub #20)
+
+1. 기준 소스: 기능별 flat package, Controller→Service, Point→Idempotency와 Order→Idempotency·Menu·Point·Outbox 내부 타입 직접 import
+2. 보존 계약: 공개 API 4개, 사용자 행 선잠금, 잠금 뒤 시간 확정, 충전·주문·멱등·Outbox 원자성, Outbox `SKIP LOCKED`·fencing·트랜잭션 밖 HTTP
+3. 실행: 2026-07-16 MySQL 8.4 healthy에서 `./gradlew clean check build` 성공; 전체 103개, 성공 103개, 실패 0개, 오류 0개, 제외 0개. `./gradlew bootRun` 시작과 `GET /actuator/health`의 `UP` 확인
+4. 재현 커밋: `6bf7f064019b8923ec4521a2f30a57557b50b0f7`; GitHub 작업 이슈 `#20`; 독립 리뷰 must·should·nit 0개
 
 ### 기반선 검증 증거 (GitHub #1)
 
@@ -183,6 +191,8 @@
 | 정책 ID | 확정 내용 | 반영 문서·API | 관련 ADR | 계획된 테스트 ID | 구현 상태 | 현재 증거 |
 |---|---|---|---|---|---|---|
 | `POL-PLATFORM-01` | Java 17, Spring Boot 4.1.0, Gradle 9.5.1, MySQL 8.4 LTS | [README](../README.md), [아키텍처](./architecture.md) | [0005](./adr/0005-establish-java-spring-mysql-platform-baseline.md) | `IT-DB-001`, `QT-CONFIG-002` | 검증됨 | 문서·빌드·Compose·실제 MySQL Flyway 실행 일치를 [#1 증거](#기반선-검증-증거-github-1)로 검증 |
+| `POL-ARCH-01` | 기능 우선 API·Application·Domain·Infrastructure 책임, Controller→Facade, 다른 기능은 공개 Application 계약만 참조하고 순환·빈 위임 계층 금지 | [모듈러 모놀리스](./architecture.md#6-모듈러-모놀리스), [기능 경계](./context.md#기능-경계와-의존-방향) | [0006](./adr/0006-use-feature-oriented-modular-monolith.md), [0026](./adr/0026-refine-feature-first-layered-architecture.md) | `QT-ARCH-001`, 전체 `AT-*`·`IT-*`·`CT-*` 회귀 | 구현 중 | 승인 구조와 변경 전 103개 회귀 기준은 [#20 증거](#구조-리팩토링-기준선-증거-github-20)로 고정; 패키지·Facade·구조 테스트 구현과 최종 증거는 추적 이슈 `#19`에서 진행 중 |
+| `POL-LOMBOK-01` | Lombok은 `compileOnly`·`annotationProcessor`의 유일한 신규 의존성으로 사용하고 생성자·로거·보호된 JPA 기본 생성자·선택 Getter에 제한하며 위험한 Entity annotation 금지 | [승인된 기술 기준선](./architecture.md#2-승인된-기술-기준선), [테스트 환경](./test-strategy.md#41-환경-계약) | [0027](./adr/0027-use-lombok-with-restrictions.md) | `QT-DEPS-001`, `QT-LOMBOK-001` | 구현 중 | 정책 승인과 검증 계획은 ADR·문서에 반영; Gradle·소스·annotation processing 실행 증거는 작업 이슈 `#22`~`#25`에서 추가 예정 |
 | `POL-IDEM-01` | 사용자 행 잠금 뒤 MySQL upsert·잠금 조회로 키를 선점하고 업무 처리와 멱등 결과를 한 트랜잭션에 커밋 | [멱등 처리](./architecture.md#9-멱등-처리), [ERD](./erd.md#44-idempotency_records) | [0015](./adr/0015-protect-mutations-with-idempotency-keys.md), [0025](./adr/0025-lock-user-before-idempotency-record.md) | `IT-ORDER-001`, `IT-ORDER-002`, `IT-ORDER-003`, `IT-IDEM-001`, `IT-IDEM-002`, `CT-IDEM-001`, `CT-IDEM-002`, `QT-HARNESS-001` | 검증됨 | 충전의 선점·결과 재사용·키 충돌은 [#3 증거](#포인트-충전-검증-증거-github-3), 주문의 성공·실패 원자 커밋과 동시 재시도는 [#4 증거](#주문결제-검증-증거-github-4), 문서·하네스의 잠금 선행 안내는 [#17 증거](#문서와-하네스-동기화-검증-증거-github-17)로 검증 |
 | `POL-IDEM-02` | 완료 멱등 레코드는 최소 24시간 보존하며 현재 정리 기능은 구현하지 않음 | [ERD](./erd.md#44-idempotency_records) | [0015](./adr/0015-protect-mutations-with-idempotency-keys.md) | 예약: `IT-IDEM-003` | 현재 범위 제외 | 정리 기능 도입 시 구현·검증 |
 | `POL-POINT-01` | 양의 signed `BIGINT` 충전만 허용하고 임의 상한 없이 덧셈 overflow를 `409 POINT_BALANCE_OVERFLOW`로 거절 | [포인트 충전](./architecture.md#10-포인트-충전), [API](./api-spec.md#5-포인트-충전), [ERD](./erd.md#41-users) | [0016](./adr/0016-store-positive-point-balance-without-arbitrary-cap.md) | `UT-POINT-001`, `UT-POINT-002`, `AT-POINT-001`, `AT-POINT-002`, `CT-POINT-001` | 검증됨 | 입력 범위·정확한 잔액 증가·overflow 상태 불변과 멱등 결과를 [#3 증거](#포인트-충전-검증-증거-github-3)로 검증 |
@@ -200,12 +210,12 @@
 | `POL-RUN-01` | Docker Compose는 MySQL만 실행하고 애플리케이션은 호스트에서 `./gradlew bootRun` | [테스트 환경](./test-strategy.md#41-환경-계약), [README](../README.md) | [0010](./adr/0010-test-against-mysql-with-docker-compose.md) | `IT-DB-001`, `QT-CONFIG-002` | 검증됨 | 2026-07-16 MySQL healthy와 호스트 `bootRun`·health `UP`을 [#1 증거](#기반선-검증-증거-github-1)로 확인 |
 | `POL-TEST-01` | 멱등 Compose 스크립트로 개발·테스트 DB를 준비하고 일반 테스트의 Outbox 워커를 비활성화하며 테스트 소유 데이터만 정리 | [데이터 격리](./test-strategy.md#7-데이터-격리와-재현성) | [0010](./adr/0010-test-against-mysql-with-docker-compose.md), [0018](./adr/0018-isolate-test-database-and-outbox-workers.md) | `IT-DB-004`, `QT-CONFIG-003`, `QT-CONFIG-005`, 전체 `IT-*`, `EXT-*`, `CT-*` | 검증됨 | [Compose 초기화 스크립트](../docker/mysql/init/01-create-test-database.sh), 테스트 프로필과 개발 DB 비변경은 [#1 증거](#기반선-검증-증거-github-1), 작업별 fresh MySQL은 [#16 증거](#fresh-mysql-ci-검증-증거-github-16)로 검증하고, 워커 전용 Context 종료 격리는 [#18 증거](#최종-전체-리뷰-검증-증거-github-18)로 검증 |
 | `POL-SCHEMA-01` | 멱등·Outbox 상태별 필수·NULL 조합과 타입·횟수 범위를 MySQL CHECK로 강제 | [ERD 목표 제약](./erd.md#5-목표-제약-조건) | [0020](./adr/0020-enforce-lifecycle-invariants-with-database-checks.md), [0023](./adr/0023-define-outbox-field-lifecycle.md) | `IT-DB-002`, `IT-DB-003`, `QT-SCHEMA-001` | 검증됨 | 상태별 조합·범위·대소문자·FK·UNIQUE·인덱스를 실제 MySQL에서 [#1 증거](#기반선-검증-증거-github-1)로 검증 |
-| `POL-DEPS-01` | 기존 Web MVC·JPA·MySQL 외 추가 애플리케이션 의존성은 Validation·Actuator·Flyway만, 빌드 도구는 Spotless·Java 포매터만 승인하고 Mock·비동기·polling은 JDK 사용 | [승인된 기술 기준선](./architecture.md#2-승인된-기술-기준선), [테스트 환경](./test-strategy.md#41-환경-계약) | [0005](./adr/0005-establish-java-spring-mysql-platform-baseline.md), [0013](./adr/0013-use-actuator-and-micrometer-for-observability.md), [0019](./adr/0019-use-spotless-as-format-gate.md), [0022](./adr/0022-accept-user-id-without-authentication.md) | `QT-DEPS-001`, `QT-CONFIG-001`, `QT-FORMAT-001` | 검증됨 | 사용자 승인된 Spring Boot Flyway 통합 모듈을 포함한 정확한 목록과 미승인 인증 의존성 부재를 [#1 증거](#기반선-검증-증거-github-1)로 검증 |
+| `POL-DEPS-01` | 기존 Web MVC·JPA·MySQL 외 추가 애플리케이션 의존성은 Validation·Actuator·Flyway와 제한된 Lombok만, 빌드 도구는 Spotless·Java 포매터만 승인하고 구조 검사·Mock·비동기·polling은 JDK 사용 | [승인된 기술 기준선](./architecture.md#2-승인된-기술-기준선), [테스트 환경](./test-strategy.md#41-환경-계약) | [0005](./adr/0005-establish-java-spring-mysql-platform-baseline.md), [0013](./adr/0013-use-actuator-and-micrometer-for-observability.md), [0019](./adr/0019-use-spotless-as-format-gate.md), [0022](./adr/0022-accept-user-id-without-authentication.md), [0027](./adr/0027-use-lombok-with-restrictions.md) | `QT-DEPS-001`, `QT-CONFIG-001`, `QT-FORMAT-001`, `QT-LOMBOK-001` | 구현 중 | 기존 승인 목록과 미승인 인증 의존성 부재는 [#1 증거](#기반선-검증-증거-github-1), Lombok scope와 유일 신규 의존성 검증은 작업 이슈 `#22`에서 추가 예정 |
 | `POL-FORMAT-01` | `spotlessCheck`를 `check`에 포함하고 `spotlessApply`만 명시적으로 소스를 수정 | [테스트 실행 절차](./test-strategy.md#9-실행-절차) | [0019](./adr/0019-use-spotless-as-format-gate.md) | `QT-FORMAT-001` | 검증됨 | Spotless·Google Java Format과 `check` 연결을 [#1 증거](#기반선-검증-증거-github-1)로 검증 |
 
 ## 6. ADR 색인
 
-활성 ADR은 프로젝트 소유자가 확인한 `승인됨` 상태이며 0002·0007과 인증 관련 0008·0012·0021은 후속 결정으로 대체됐다. ADR 0022는 0005의 Security 기준선, 0006의 Auth 모듈, 0015의 인증 실패 예외, 0018의 공유 JWT 키 조건도 부분 대체하고, ADR 0024는 0022의 기존 사용자 준비 절차 제외 조항만 부분 대체한다. 상태와 부분 대체 관계의 정본은 [ADR 목록](./adr/)이다.
+활성 ADR은 프로젝트 소유자가 확인한 `승인됨` 상태이며 0002·0007과 인증 관련 0008·0012·0021은 후속 결정으로 대체됐다. ADR 0022는 0005의 Security 기준선, 0006의 Auth 모듈, 0015의 인증 실패 예외, 0018의 공유 JWT 키 조건도 부분 대체하고, ADR 0024는 0022의 기존 사용자 준비 절차 제외 조항만 부분 대체한다. ADR 0026은 0006을 유지하면서 기능 내부 계층과 공개 Facade 경계를 구체화한다. 상태와 부분 대체 관계의 정본은 [ADR 목록](./adr/)이다.
 
 | ADR | 결정 | 연결되는 요구·정책 |
 |---|---|---|
@@ -234,6 +244,8 @@
 | [0023](./adr/0023-define-outbox-field-lifecycle.md) | Outbox 상태별 필드 수명주기와 실패 횟수 | FR-04, NFR-05, POL-OUTBOX-02·07, POL-SCHEMA-01 |
 | [0024](./adr/0024-seed-reference-user-for-local-execution.md) | 과제와 로컬 실행용 기준 사용자 seed | FR-02, POL-USER-01 |
 | [0025](./adr/0025-lock-user-before-idempotency-record.md) | FK 교착 회피를 위한 사용자 행 선잠금 | FR-02, FR-03, NFR-01, NFR-03, POL-IDEM-01 |
+| [0026](./adr/0026-refine-feature-first-layered-architecture.md) | 기능 우선 계층형 아키텍처와 공개 Facade 경계 | FR-01~FR-05, NFR-03, POL-ARCH-01 |
+| [0027](./adr/0027-use-lombok-with-restrictions.md) | 생성자·로거·JPA 기본 생성자에 제한된 Lombok | POL-LOMBOK-01, POL-DEPS-01 |
 
 ## 7. 제외 범위 보호선
 

@@ -69,6 +69,8 @@ class TraceabilityTest {
     Set<String> expectedPolicies =
         Set.of(
             "POL-PLATFORM-01",
+            "POL-ARCH-01",
+            "POL-LOMBOK-01",
             "POL-IDEM-01",
             "POL-IDEM-02",
             "POL-POINT-01",
@@ -99,13 +101,16 @@ class TraceabilityTest {
             .collect(Collectors.toUnmodifiableSet()));
 
     Set<String> excludedPolicies = Set.of("POL-IDEM-02", "POL-OUTBOX-04");
+    Set<String> inProgressPolicies = Set.of("POL-ARCH-01", "POL-LOMBOK-01", "POL-DEPS-01");
     policyRows.stream()
         .forEach(
             line -> {
               Matcher policyId = POLICY_ID.matcher(line);
               assertTrue(policyId.find(), "정책 ID를 찾을 수 없습니다: " + line);
               String expectedStatus =
-                  excludedPolicies.contains(policyId.group()) ? "| 현재 범위 제외 |" : "| 검증됨 |";
+                  excludedPolicies.contains(policyId.group())
+                      ? "| 현재 범위 제외 |"
+                      : inProgressPolicies.contains(policyId.group()) ? "| 구현 중 |" : "| 검증됨 |";
               assertTrue(line.contains(expectedStatus), "현재 범위 정책 상태가 완료 또는 명시적 제외여야 합니다: " + line);
             });
   }
