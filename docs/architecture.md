@@ -324,8 +324,8 @@ LIMIT 3;
 | 충전·결제 | 사용자 PK `FOR UPDATE` | `users(id)` PK | 락 대기, deadlock, 트랜잭션 시간 |
 | 멱등 결과 | 사용자·작업·키 단건 조회/삽입 | UNIQUE `(user_id, operation_type, idempotency_key)` | 중복키 대기, 재사용률, 충돌률 |
 | 인기 메뉴 | 상태·시간 구간 집계 | `orders(status, paid_at, menu_id)` | 스캔 행 수, 임시 테이블, 정렬, 응답 분포 |
-| 전송 예정 점유 | 상태·재시도 시각 조회 | `outbox_events(status, next_retry_at)` | 조회 행 수, backlog, 예약 지연 |
-| lease 만료 복구 | 상태·잠금 시각 조회 | 후보: `outbox_events(status, locked_at)` | 만료 건수, 중복 점유, claim 불일치 |
+| 전송 예정 점유 | 재시도·생성 시각 정렬 뒤 `SKIP LOCKED LIMIT` | `outbox_events(next_retry_at, created_at, event_id, status, locked_at)` | 잠금 조회·batch 갱신 횟수, backlog, 예약 지연 |
+| lease 만료 복구 | 같은 선점 조회에서 상태·잠금 시각 필터 | `outbox_events(next_retry_at, created_at, event_id, status, locked_at)`; 추가 후보 `(status, locked_at)` | 만료 건수, 필터 행 수, 중복 점유, claim 불일치 |
 | 주문당 이벤트 보장 | 주문 ID 중복 방지 | `outbox_events(order_id)` UNIQUE | 중복 삽입 실패 |
 
 운영과 유사한 데이터 분포에서 `EXPLAIN ANALYZE`로 인기 메뉴와 Outbox 후보 조회의 실제 실행 계획을 확인한다. 작은 개발 데이터에서 인덱스가 선택되지 않았다는 이유만으로 결론 내리지 않고, 예상 기간 주문 수와 Outbox backlog를 재현한 뒤 스캔 행 수와 실행 시간을 기록한다.

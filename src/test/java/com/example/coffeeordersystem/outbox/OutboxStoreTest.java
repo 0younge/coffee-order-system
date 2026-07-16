@@ -264,8 +264,8 @@ class OutboxStoreTest {
       expected.add(
           insertPendingEvent(0, NOW.minusSeconds(1), NOW.minusSeconds(100 - index), null, null));
     }
-    AtomicLong preparedStatements = new AtomicLong();
-    DataSource measuredDataSource = measuredDataSource(preparedStatements);
+    SqlStatementCounter statementCounter = new SqlStatementCounter();
+    DataSource measuredDataSource = measuredDataSource(statementCounter);
     JdbcTemplate measuredJdbcTemplate = new JdbcTemplate(measuredDataSource);
     OutboxStore measuredStore = new OutboxStore(measuredJdbcTemplate);
     TransactionTemplate transactionTemplate =
@@ -274,7 +274,17 @@ class OutboxStoreTest {
     List<OutboxClaim> claims = transactionTemplate.execute(status -> measuredStore.claim(NOW, 50));
 
     assertEquals(expected, eventIds(claims));
-    assertEquals(2L, preparedStatements.get());
+    Set<String> claimTokens = new HashSet<>(claims.stream().map(OutboxClaim::claimToken).toList());
+    Set<String> storedClaimTokens =
+        new HashSet<>(
+            jdbcTemplate.queryForList(
+                "SELECT claim_token FROM outbox_events WHERE order_id IN " + orderIds(),
+                String.class));
+    assertEquals(50, claimTokens.size());
+    assertEquals(claimTokens, storedClaimTokens);
+    assertEquals(2L, statementCounter.preparedStatements.get());
+    assertEquals(1L, statementCounter.batchExecutions.get());
+    assertEquals(0L, statementCounter.individualUpdateExecutions.get());
     assertEquals(
         50L,
         count(
@@ -372,7 +382,7 @@ class OutboxStoreTest {
     return value == null ? 0 : value;
   }
 
-  private DataSource measuredDataSource(AtomicLong preparedStatements) {
+  private DataSource measuredDataSource(SqlStatementCounter statementCounter) {
     DataSource delegate = jdbcTemplate.getDataSource();
     if (delegate == null) {
       throw new IllegalStateException("테스트 DataSource가 필요합니다.");
@@ -385,21 +395,41 @@ class OutboxStoreTest {
               Object result = invoke(method, delegate, arguments);
               if (method.getName().equals("getConnection")
                   && result instanceof java.sql.Connection connection) {
-                return measuredConnection(connection, preparedStatements);
+                return measuredConnection(connection, statementCounter);
               }
               return result;
             });
   }
 
   private java.sql.Connection measuredConnection(
-      java.sql.Connection delegate, AtomicLong preparedStatements) {
+      java.sql.Connection delegate, SqlStatementCounter statementCounter) {
     return (java.sql.Connection)
         Proxy.newProxyInstance(
             java.sql.Connection.class.getClassLoader(),
             new Class<?>[] {java.sql.Connection.class},
             (proxy, method, arguments) -> {
-              if (method.getName().equals("prepareStatement")) {
-                preparedStatements.incrementAndGet();
+              Object result = invoke(method, delegate, arguments);
+              if (method.getName().equals("prepareStatement")
+                  && result instanceof java.sql.PreparedStatement preparedStatement) {
+                statementCounter.preparedStatements.incrementAndGet();
+                return measuredStatement(preparedStatement, statementCounter);
+              }
+              return result;
+            });
+  }
+
+  private java.sql.PreparedStatement measuredStatement(
+      java.sql.PreparedStatement delegate, SqlStatementCounter statementCounter) {
+    return (java.sql.PreparedStatement)
+        Proxy.newProxyInstance(
+            java.sql.PreparedStatement.class.getClassLoader(),
+            new Class<?>[] {java.sql.PreparedStatement.class},
+            (proxy, method, arguments) -> {
+              if (method.getName().equals("executeBatch")) {
+                statementCounter.batchExecutions.incrementAndGet();
+              }
+              if (method.getName().equals("executeUpdate")) {
+                statementCounter.individualUpdateExecutions.incrementAndGet();
               }
               return invoke(method, delegate, arguments);
             });
@@ -411,5 +441,12 @@ class OutboxStoreTest {
     } catch (InvocationTargetException exception) {
       throw exception.getTargetException();
     }
+  }
+
+  private static final class SqlStatementCounter {
+
+    private final AtomicLong preparedStatements = new AtomicLong();
+    private final AtomicLong batchExecutions = new AtomicLong();
+    private final AtomicLong individualUpdateExecutions = new AtomicLong();
   }
 }
