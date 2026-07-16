@@ -14,8 +14,8 @@ import com.example.coffeeordersystem.idempotency.application.IdempotencyClaim;
 import com.example.coffeeordersystem.idempotency.application.IdempotencyFacade;
 import com.example.coffeeordersystem.idempotency.application.IdempotencyOperation;
 import com.example.coffeeordersystem.idempotency.application.RequestHasher;
-import com.example.coffeeordersystem.menu.MenuResponse;
-import com.example.coffeeordersystem.menu.MenuService;
+import com.example.coffeeordersystem.menu.application.MenuQueryFacade;
+import com.example.coffeeordersystem.menu.application.MenuSnapshot;
 import com.example.coffeeordersystem.outbox.OutboxEventWriter;
 import com.example.coffeeordersystem.point.LockedPointBalance;
 import com.example.coffeeordersystem.point.PointPaymentService;
@@ -39,7 +39,7 @@ class OrderServiceTest {
     PointPaymentService pointPaymentService = mock(PointPaymentService.class);
     IdempotencyFacade idempotencyFacade = mock(IdempotencyFacade.class);
     RequestHasher requestHasher = mock(RequestHasher.class);
-    MenuService menuService = mock(MenuService.class);
+    MenuQueryFacade menuQueryFacade = mock(MenuQueryFacade.class);
     OrderRepository orderRepository = mock(OrderRepository.class);
     OutboxEventWriter outboxEventWriter = mock(OutboxEventWriter.class);
     ApiResponseJsonCodec responseJsonCodec = mock(ApiResponseJsonCodec.class);
@@ -63,7 +63,7 @@ class OrderServiceTest {
     when(idempotencyFacade.claim(
             1L, IdempotencyOperation.ORDER, "idempotency-key", "request-hash", paidAt))
         .thenReturn(new IdempotencyClaim(3L, "request-hash", "PROCESSING", null, null));
-    when(menuService.findById(2L)).thenReturn(Optional.of(new MenuResponse(2L, "메뉴", 4_000L)));
+    when(menuQueryFacade.findById(2L)).thenReturn(Optional.of(new MenuSnapshot(2L, "메뉴", 4_000L)));
     when(pointBalance.pay(4_000L, paidAt)).thenReturn(true);
     when(pointBalance.balance()).thenReturn(1_000L);
     Order savedOrder = mock(Order.class);
@@ -78,7 +78,7 @@ class OrderServiceTest {
             pointPaymentService,
             idempotencyFacade,
             requestHasher,
-            menuService,
+            menuQueryFacade,
             orderRepository,
             outboxEventWriter,
             responseJsonCodec,

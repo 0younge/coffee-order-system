@@ -8,8 +8,8 @@ import com.example.coffeeordersystem.idempotency.application.IdempotencyClaim;
 import com.example.coffeeordersystem.idempotency.application.IdempotencyFacade;
 import com.example.coffeeordersystem.idempotency.application.IdempotencyOperation;
 import com.example.coffeeordersystem.idempotency.application.RequestHasher;
-import com.example.coffeeordersystem.menu.MenuResponse;
-import com.example.coffeeordersystem.menu.MenuService;
+import com.example.coffeeordersystem.menu.application.MenuQueryFacade;
+import com.example.coffeeordersystem.menu.application.MenuSnapshot;
 import com.example.coffeeordersystem.outbox.OutboxEventWriter;
 import com.example.coffeeordersystem.point.LockedPointBalance;
 import com.example.coffeeordersystem.point.PointPaymentService;
@@ -28,7 +28,7 @@ class OrderService {
   private final PointPaymentService pointPaymentService;
   private final IdempotencyFacade idempotencyFacade;
   private final RequestHasher requestHasher;
-  private final MenuService menuService;
+  private final MenuQueryFacade menuQueryFacade;
   private final OrderRepository orderRepository;
   private final OutboxEventWriter outboxEventWriter;
   private final ApiResponseJsonCodec responseJsonCodec;
@@ -56,7 +56,7 @@ class OrderService {
           claim.httpStatus(), responseJsonCodec.read(claim.responseBody()), claim.responseBody());
     }
 
-    MenuResponse menu = menuService.findById(command.menuId()).orElse(null);
+    MenuSnapshot menu = menuQueryFacade.findById(command.menuId()).orElse(null);
     if (menu == null) {
       return completeFailure(claim, ErrorCode.MENU_NOT_FOUND, now);
     }

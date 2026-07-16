@@ -1,11 +1,11 @@
-package com.example.coffeeordersystem.menu;
+package com.example.coffeeordersystem.menu.domain;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
-record PopularMenuWindow(Instant from, Instant to) {
+public record PopularMenuWindow(Instant from, Instant to) {
 
-  static PopularMenuWindow endingAt(Instant to) {
+  public static PopularMenuWindow endingAt(Instant to) {
     Instant normalizedTo = ceilToMicrosecond(to);
     return new PopularMenuWindow(normalizedTo.minus(7, ChronoUnit.DAYS), normalizedTo);
   }

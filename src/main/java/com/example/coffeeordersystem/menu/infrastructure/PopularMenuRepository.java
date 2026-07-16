@@ -1,5 +1,6 @@
-package com.example.coffeeordersystem.menu;
+package com.example.coffeeordersystem.menu.infrastructure;
 
+import com.example.coffeeordersystem.menu.domain.PopularMenuAggregate;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -9,11 +10,11 @@ import org.springframework.stereotype.Repository;
 
 @RequiredArgsConstructor
 @Repository
-class PopularMenuRepository {
+public class PopularMenuRepository {
 
   private final JdbcTemplate jdbcTemplate;
 
-  List<PopularMenuAggregate> findTopThree(Instant from, Instant to) {
+  public List<PopularMenuAggregate> findTopThree(Instant from, Instant to) {
     return jdbcTemplate.query(
         "SELECT m.id AS menu_id, m.name, m.price, COUNT(*) AS order_count "
             + "FROM orders o JOIN menus m ON m.id = o.menu_id "

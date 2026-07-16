@@ -1,5 +1,6 @@
-package com.example.coffeeordersystem.menu;
+package com.example.coffeeordersystem.menu.application;
 
+import com.example.coffeeordersystem.menu.domain.PopularMenuAggregate;
 import java.util.List;
 import java.util.stream.IntStream;
 
@@ -9,13 +10,13 @@ final class PopularMenuRanking {
 
   private PopularMenuRanking() {}
 
-  static List<PopularMenuResponse> rank(List<PopularMenuAggregate> sortedAggregates) {
+  static List<PopularMenuResult> rank(List<PopularMenuAggregate> sortedAggregates) {
     int resultCount = Math.min(sortedAggregates.size(), MAX_RESULTS);
     return IntStream.range(0, resultCount)
         .mapToObj(
             index -> {
               PopularMenuAggregate aggregate = sortedAggregates.get(index);
-              return new PopularMenuResponse(
+              return new PopularMenuResult(
                   index + 1,
                   aggregate.menuId(),
                   aggregate.name(),

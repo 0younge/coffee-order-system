@@ -1,4 +1,4 @@
-package com.example.coffeeordersystem.menu;
+package com.example.coffeeordersystem.menu.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "menus")
-class Menu {
+public class Menu {
 
   @Id private Long id;
 
@@ -20,15 +20,15 @@ class Menu {
   @Column(nullable = false)
   private long price;
 
-  Long id() {
+  public Long id() {
     return id;
   }
 
-  String name() {
+  public String name() {
     return name;
   }
 
-  long price() {
+  public long price() {
     return price;
   }
 }

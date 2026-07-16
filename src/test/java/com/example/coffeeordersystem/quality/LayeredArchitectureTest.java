@@ -70,6 +70,36 @@ class LayeredArchitectureTest {
     assertFalse(
         Files.exists(MAIN_SOURCE.resolve("idempotency/IdempotencyService.java")),
         "IdempotencyFacade 뒤에 기존 Service 위임 계층을 남길 수 없습니다.");
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("menu/api/MenuController.java")),
+        "Menu Controller는 API 계층에 있어야 합니다.");
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("menu/application/MenuQueryFacade.java")),
+        "Menu는 공개 Application Facade를 제공해야 합니다.");
+    assertFalse(
+        Files.exists(MAIN_SOURCE.resolve("menu/MenuService.java"))
+            || Files.exists(MAIN_SOURCE.resolve("menu/PopularMenuService.java")),
+        "MenuQueryFacade 뒤에 기존 Service 위임 계층을 남길 수 없습니다.");
+    String menuController = Files.readString(MAIN_SOURCE.resolve("menu/api/MenuController.java"));
+    assertTrue(
+        menuController.contains("MenuQueryFacade"), "MenuController는 MenuQueryFacade를 사용해야 합니다.");
+    assertEquals(
+        1,
+        menuController
+            .lines()
+            .filter(line -> line.contains("com.example.coffeeordersystem.menu.application."))
+            .count(),
+        "MenuController는 하나의 Application Facade만 참조해야 합니다.");
+    assertFalse(
+        menuController.contains("com.example.coffeeordersystem.menu.domain.")
+            || menuController.contains("com.example.coffeeordersystem.menu.infrastructure."),
+        "MenuController는 Menu Domain이나 Infrastructure를 직접 참조할 수 없습니다.");
+    String orderService = Files.readString(MAIN_SOURCE.resolve("order/OrderService.java"));
+    assertTrue(
+        orderService.contains("menu.application.MenuQueryFacade")
+            && orderService.contains("menu.application.MenuSnapshot"),
+        "Order는 Menu Application Facade와 Snapshot 계약만 사용해야 합니다.");
+    assertFalse(orderService.contains("MenuResponse"), "Order는 Menu API 응답 DTO를 사용할 수 없습니다.");
   }
 
   @Test
