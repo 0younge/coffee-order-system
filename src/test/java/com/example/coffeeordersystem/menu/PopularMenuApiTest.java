@@ -13,6 +13,8 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -137,9 +139,7 @@ class PopularMenuApiTest {
   @Test
   @DisplayName("AT-POPULAR-001 대상 주문이 없으면 빈 배열을 반환하고 상태를 변경하지 않는다")
   void returnsEmptyArrayWithoutChangingState() throws Exception {
-    long usersBefore = count("SELECT COUNT(*) FROM users");
-    long menusBefore = count("SELECT COUNT(*) FROM menus");
-    long ordersBefore = count("SELECT COUNT(*) FROM orders");
+    DatabaseState before = databaseState();
 
     mockMvc
         .perform(get("/api/v1/menus/popular"))
@@ -147,9 +147,7 @@ class PopularMenuApiTest {
         .andExpect(jsonPath("$.data").isArray())
         .andExpect(jsonPath("$.data").isEmpty());
 
-    assertEquals(usersBefore, count("SELECT COUNT(*) FROM users"));
-    assertEquals(menusBefore, count("SELECT COUNT(*) FROM menus"));
-    assertEquals(ordersBefore, count("SELECT COUNT(*) FROM orders"));
+    assertEquals(before, databaseState());
   }
 
   private void insertOrders(long menuId, int count) {
@@ -179,8 +177,19 @@ class PopularMenuApiTest {
         Timestamp.from(NOW));
   }
 
-  private long count(String sql) {
-    Long value = jdbcTemplate.queryForObject(sql, Long.class);
-    return value == null ? 0L : value;
+  private DatabaseState databaseState() {
+    return new DatabaseState(
+        jdbcTemplate.queryForList("SELECT * FROM users ORDER BY id"),
+        jdbcTemplate.queryForList("SELECT * FROM menus ORDER BY id"),
+        jdbcTemplate.queryForList("SELECT * FROM orders ORDER BY id"),
+        jdbcTemplate.queryForList("SELECT * FROM outbox_events ORDER BY event_id"),
+        jdbcTemplate.queryForList("SELECT * FROM idempotency_records ORDER BY id"));
   }
+
+  private record DatabaseState(
+      List<Map<String, Object>> users,
+      List<Map<String, Object>> menus,
+      List<Map<String, Object>> orders,
+      List<Map<String, Object>> outboxEvents,
+      List<Map<String, Object>> idempotencyRecords) {}
 }
