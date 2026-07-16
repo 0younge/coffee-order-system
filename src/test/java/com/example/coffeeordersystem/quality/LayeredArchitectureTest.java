@@ -345,11 +345,25 @@ class LayeredArchitectureTest {
     SourceFile controllerWithServiceDependency =
         syntheticSource(
             "menu/api/SyntheticController.java",
-            "@org.springframework.web.bind.annotation.RestController class SyntheticController {"
-                + " private final MenuQueryService menuQueryService = null; }");
+            "@org.springframework.stereotype.Controller\n"
+                + "class SyntheticController {\n"
+                + "  private MenuQueryService menuQueryService;\n"
+                + "}");
     assertThrows(
         AssertionError.class,
         () -> verifyControllerUsesOwnFacadeOnly(controllerWithServiceDependency));
+    SourceFile controllerWithConstructorDependency =
+        syntheticSource(
+            "menu/api/ConstructorController.java",
+            "import com.example.coffeeordersystem.menu.application.MenuQueryFacade;\n"
+                + "@org.springframework.web.bind.annotation.RestController\n"
+                + "class ConstructorController {\n"
+                + "  private final MenuQueryFacade menuQueryFacade;\n"
+                + "  ConstructorController(MenuQueryFacade facade, MenuQueryService service) {}\n"
+                + "}");
+    assertThrows(
+        AssertionError.class,
+        () -> verifyControllerUsesOwnFacadeOnly(controllerWithConstructorDependency));
     SourceFile crossFeatureFlatLeak =
         syntheticSource(
             "order/application/LegacyPointCaller.java",
@@ -514,7 +528,7 @@ class LayeredArchitectureTest {
   }
 
   private void verifyControllerUsesOwnFacadeOnly(SourceFile source) {
-    if (!hasAnnotation(source.contents(), "RestController")) {
+    if (!hasAnyAnnotation(source.contents(), "RestController", "Controller")) {
       return;
     }
     String sourceFeature = featureOf(source.path());
@@ -522,9 +536,11 @@ class LayeredArchitectureTest {
     assertTrue(
         normalized(source.path()).contains("/" + sourceFeature + "/api/"),
         source.path() + " Controller는 자기 기능의 API 계층에 있어야 합니다.");
-    List<String> dependencies =
-        source.contents().lines().filter(line -> line.contains("private final ")).toList();
+    List<String> dependencies = controllerInstanceFields(source.contents());
     assertEquals(1, dependencies.size(), source.path() + " Controller는 Facade 하나만 주입해야 합니다.");
+    assertTrue(
+        dependencies.get(0).startsWith("private final "),
+        source.path() + " Controller 의존성은 private final 생성자 주입이어야 합니다.");
     Matcher dependency =
         Pattern.compile("private final ([A-Za-z_$][\\w$]*) [A-Za-z_$][\\w$]*;")
             .matcher(dependencies.get(0));
@@ -541,6 +557,36 @@ class LayeredArchitectureTest {
                     + facadeType
                     + ";"),
         source.path() + " Controller는 자기 기능의 Application Facade를 사용해야 합니다.");
+    String className = source.path().getFileName().toString().replaceFirst("\\.java$", "");
+    assertFalse(
+        Pattern.compile(
+                "(?m)^\\s*(?:public|protected|private)?\\s*" + Pattern.quote(className) + "\\s*\\(")
+            .matcher(source.contents())
+            .find(),
+        source.path() + " Controller는 Lombok 생성자 주입 외 명시 생성자를 둘 수 없습니다.");
+    for (String injection : List.of("Autowired", "Inject", "Resource")) {
+      assertFalse(
+          hasAnnotation(source.contents(), injection),
+          source.path() + " Controller는 setter·method injection을 사용할 수 없습니다: " + injection);
+    }
+  }
+
+  private List<String> controllerInstanceFields(String source) {
+    return source
+        .lines()
+        .filter(
+            line -> {
+              String trimmed = line.trim();
+              if (!trimmed.endsWith(";") || trimmed.contains(" static ")) {
+                return false;
+              }
+              if (trimmed.matches("(?:private|protected|public)\\s+.*")) {
+                return true;
+              }
+              return line.matches("^  [A-Z][A-Za-z0-9_$]*(?:<[^;]+>)?\\s+[a-zA-Z_$][\\w$]*;$");
+            })
+        .map(String::trim)
+        .toList();
   }
 
   private void verifyMenuControllerFacadeOnly(SourceFile source) {
