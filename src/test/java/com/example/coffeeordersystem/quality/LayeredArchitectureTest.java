@@ -86,6 +86,11 @@ class LayeredArchitectureTest {
             "point/domain/QualifiedDomain.java",
             "class QualifiedDomain { org.springframework.jdbc.core.JdbcTemplate jdbc; }");
     assertThrows(AssertionError.class, () -> verifyDomainIndependence(qualifiedDomainLeak));
+    SourceFile qualifiedHttpLeak =
+        syntheticSource(
+            "point/domain/QualifiedHttpDomain.java",
+            "class QualifiedHttpDomain { org.springframework.http.ResponseEntity<?> response; }");
+    assertThrows(AssertionError.class, () -> verifyDomainIndependence(qualifiedHttpLeak));
 
     SourceFile store =
         syntheticSource(
@@ -227,6 +232,7 @@ class LayeredArchitectureTest {
             ".application.",
             ".infrastructure.",
             "org.springframework.web",
+            "org.springframework.http",
             "org.springframework.jdbc",
             "tools.jackson",
             "com.fasterxml.jackson")) {
