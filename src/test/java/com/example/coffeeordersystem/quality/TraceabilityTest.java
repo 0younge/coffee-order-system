@@ -20,6 +20,7 @@ class TraceabilityTest {
 
   private static final Pattern MARKDOWN_LINK = Pattern.compile("\\[[^]]+]\\(([^)]+)\\)");
   private static final Pattern REQUIREMENT_ID = Pattern.compile("(?:FR|NFR)-[0-9]{2}");
+  private static final Pattern POLICY_ID = Pattern.compile("POL-[A-Z]+-[0-9]{2}");
   private static final Pattern TEST_ID = Pattern.compile("[A-Z]{2,4}-[A-Z]+-[0-9]{3}");
   private static final Pattern DISPLAY_NAME = Pattern.compile("@DisplayName\\(\"([^\"]+)\"\\)");
   private static final Pattern TEST_METHOD =
@@ -36,6 +37,7 @@ class TraceabilityTest {
 
     verifyAllLocalLinks();
     assertEquals(requirementHeadings(prd), requirementRows(traceability));
+    verifyCompletedScopeStatuses(traceability);
     assertEquals(adrFiles(), adrLinks(traceability));
 
     Set<String> documentedTestIds = findIds(testStrategy, TEST_ID);
@@ -52,6 +54,56 @@ class TraceabilityTest {
         implementedTestIds.stream().allMatch(traceability::contains),
         "구현된 모든 테스트 ID가 요구사항 추적표에 연결되어야 합니다.");
     assertTrue(build.contains("inputs.files('README.md', fileTree('docs')"));
+  }
+
+  private void verifyCompletedScopeStatuses(String traceability) {
+    traceability
+        .lines()
+        .filter(line -> line.matches("^\\| \\[(?:FR|NFR)-[0-9]{2}].*"))
+        .forEach(line -> assertTrue(line.contains("| 검증됨 |"), "현재 범위 요구사항이 검증됨 상태여야 합니다: " + line));
+
+    Set<String> expectedPolicies =
+        Set.of(
+            "POL-PLATFORM-01",
+            "POL-IDEM-01",
+            "POL-IDEM-02",
+            "POL-POINT-01",
+            "POL-OUTBOX-01",
+            "POL-OUTBOX-02",
+            "POL-OUTBOX-03",
+            "POL-OUTBOX-04",
+            "POL-OUTBOX-05",
+            "POL-OUTBOX-06",
+            "POL-OUTBOX-07",
+            "POL-USER-01",
+            "POL-OBS-01",
+            "POL-POPULAR-01",
+            "POL-PERF-01",
+            "POL-RUN-01",
+            "POL-TEST-01",
+            "POL-SCHEMA-01",
+            "POL-DEPS-01",
+            "POL-FORMAT-01");
+    List<String> policyRows =
+        traceability.lines().filter(line -> line.matches("^\\| `POL-[A-Z]+-[0-9]{2}`.*")).toList();
+    assertEquals(
+        expectedPolicies,
+        policyRows.stream()
+            .map(POLICY_ID::matcher)
+            .filter(Matcher::find)
+            .map(Matcher::group)
+            .collect(Collectors.toUnmodifiableSet()));
+
+    Set<String> excludedPolicies = Set.of("POL-IDEM-02", "POL-OUTBOX-04");
+    policyRows.stream()
+        .forEach(
+            line -> {
+              Matcher policyId = POLICY_ID.matcher(line);
+              assertTrue(policyId.find(), "정책 ID를 찾을 수 없습니다: " + line);
+              String expectedStatus =
+                  excludedPolicies.contains(policyId.group()) ? "| 현재 범위 제외 |" : "| 검증됨 |";
+              assertTrue(line.contains(expectedStatus), "현재 범위 정책 상태가 완료 또는 명시적 제외여야 합니다: " + line);
+            });
   }
 
   private void verifyAllLocalLinks() throws IOException {
