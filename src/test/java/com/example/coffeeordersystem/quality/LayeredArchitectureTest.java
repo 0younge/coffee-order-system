@@ -32,13 +32,16 @@ class LayeredArchitectureTest {
           "outbox/OutboxHttpSender.java",
           "outbox/OutboxMetrics.java",
           "outbox/OutboxWorker.java");
-  private static final Pattern FEATURE_IMPORT =
+  private static final Pattern FEATURE_REFERENCE =
       Pattern.compile(
-          "(?m)^import(?: static)? com\\.example\\.coffeeordersystem\\.([a-z]+)(?:\\.([A-Za-z0-9_]+))?.*;$");
+          "(?m)(?:^import(?: static)?\\s+)?com\\.example\\.coffeeordersystem\\.([a-z]+)"
+              + "(?:\\.([A-Za-z0-9_]+))?[A-Za-z0-9_.$]*");
   private static final Pattern FIELD_INJECTION =
       Pattern.compile(
           "(?s)@(?:[A-Za-z_$][\\w$]*\\.)*(?:Autowired|Value|Resource|Inject)\\b"
               + "(?:\\s*\\([^;{}]*\\))?\\s*"
+              + "(?:@(?:[A-Za-z_$][\\w$]*\\.)*[A-Za-z_$][\\w$]*"
+              + "(?:\\s*\\([^;{}]*\\))?\\s*)*"
               + "(?:(?:public|protected|private|static|final|transient|volatile)\\s+)*"
               + "[\\w.$<>?, \\[\\]]+\\s+\\w+\\s*(?:=[^;{}]*)?;");
   private static final Pattern PROTECTED_NO_ARGS_CONSTRUCTOR =
@@ -70,6 +73,19 @@ class LayeredArchitectureTest {
             "order/application/SyntheticOrder.java",
             "import static com.example.coffeeordersystem.point.domain.PointAccount.fixture;");
     assertThrows(AssertionError.class, () -> verifyCrossFeatureBoundary(staticImport));
+
+    SourceFile qualifiedFeatureReference =
+        syntheticSource(
+            "order/application/QualifiedOrder.java",
+            "class QualifiedOrder { "
+                + "com.example.coffeeordersystem.point.domain.PointAccount account; }");
+    assertThrows(AssertionError.class, () -> verifyCrossFeatureBoundary(qualifiedFeatureReference));
+
+    SourceFile qualifiedDomainLeak =
+        syntheticSource(
+            "point/domain/QualifiedDomain.java",
+            "class QualifiedDomain { org.springframework.jdbc.core.JdbcTemplate jdbc; }");
+    assertThrows(AssertionError.class, () -> verifyDomainIndependence(qualifiedDomainLeak));
 
     SourceFile store =
         syntheticSource(
@@ -176,6 +192,12 @@ class LayeredArchitectureTest {
         FIELD_INJECTION
             .matcher("@jakarta.inject.Inject private SampleRepository repository;")
             .find());
+    assertTrue(
+        FIELD_INJECTION
+            .matcher(
+                "@Autowired @org.springframework.beans.factory.annotation.Qualifier(\"primary\") "
+                    + "private SampleRepository repository;")
+            .find());
     assertFalse(
         FIELD_INJECTION.matcher("@Autowired Sample(@Value(\"${sample}\") String value) {}").find());
   }
@@ -209,7 +231,7 @@ class LayeredArchitectureTest {
             "tools.jackson",
             "com.fasterxml.jackson")) {
       assertFalse(
-          source.contents().contains("import ") && source.contents().contains(forbidden),
+          source.contents().contains(forbidden),
           source.path() + " domain은 " + forbidden + "에 의존할 수 없습니다.");
     }
   }
@@ -219,14 +241,14 @@ class LayeredArchitectureTest {
     if (sourceFeature == null) {
       return;
     }
-    Matcher imports = FEATURE_IMPORT.matcher(source.contents());
-    while (imports.find()) {
-      String targetFeature = imports.group(1);
-      String targetLayer = imports.group(2);
+    Matcher references = FEATURE_REFERENCE.matcher(source.contents());
+    while (references.find()) {
+      String targetFeature = references.group(1);
+      String targetLayer = references.group(2);
       if (!sourceFeature.equals(targetFeature)
           && FEATURES.contains(targetFeature)
           && INTERNAL_LAYERS.contains(targetLayer)) {
-        fail(source.path() + " 다른 기능의 " + targetLayer + "를 직접 참조할 수 없습니다: " + imports.group());
+        fail(source.path() + " 다른 기능의 " + targetLayer + "를 직접 참조할 수 없습니다: " + references.group());
       }
     }
   }
@@ -239,9 +261,9 @@ class LayeredArchitectureTest {
       if (sourceFeature == null) {
         continue;
       }
-      Matcher imports = FEATURE_IMPORT.matcher(source.contents());
-      while (imports.find()) {
-        String targetFeature = imports.group(1);
+      Matcher references = FEATURE_REFERENCE.matcher(source.contents());
+      while (references.find()) {
+        String targetFeature = references.group(1);
         if (FEATURES.contains(targetFeature) && !sourceFeature.equals(targetFeature)) {
           dependencies.get(sourceFeature).add(targetFeature);
         }
