@@ -56,8 +56,8 @@ class OrderService {
 
   @Transactional
   OrderResult place(OrderCommand command) {
-    Instant now = clock.instant();
     LockedPointBalance pointBalance = pointPaymentService.lock(command.userId());
+    Instant now = clock.instant();
 
     String requestHash = requestHasher.hash(IdempotencyOperation.ORDER, command.menuId());
     IdempotencyClaim claim =

@@ -1,5 +1,6 @@
 package com.example.coffeeordersystem.order;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -354,7 +355,8 @@ class OrderApiTest {
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
         .andExpect(jsonPath("$.success").value(false))
         .andExpect(jsonPath("$.code").value(errorCode))
-        .andExpect(jsonPath("$.data").doesNotExist());
+        .andExpect(jsonPath("$.data").hasJsonPath())
+        .andExpect(jsonPath("$.data").value(nullValue()));
   }
 
   private String body(long targetMenuId) {

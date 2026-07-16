@@ -121,7 +121,7 @@ class ObservabilityTest {
   }
 
   @Test
-  @DisplayName("QT-CONFIG-001 QT-OBS-002 health 경계와 기본·사용자 지표를 등록한다")
+  @DisplayName("AT-CONTRACT-001 QT-CONFIG-001 QT-OBS-002 HTTP 경계와 승인 지표를 검증한다")
   void exposesOnlyHealthAndRegistersApprovedMetrics() throws Exception {
     double pendingBefore = meterRegistry.get("coffee.outbox.pending").gauge().value();
     double failedBefore = meterRegistry.get("coffee.outbox.failed").gauge().value();
@@ -138,11 +138,11 @@ class ObservabilityTest {
         .andExpect(jsonPath("$.details").doesNotExist());
     mockMvc.perform(get("/actuator")).andExpect(status().isNotFound());
     mockMvc.perform(get("/actuator/metrics")).andExpect(status().isNotFound());
+    mockMvc.perform(get("/api/v1/not-defined")).andExpect(status().isNotFound());
+    mockMvc.perform(post("/api/v1/menus")).andExpect(status().isMethodNotAllowed());
     mockMvc
-        .perform(get("/api/v1/not-defined"))
-        .andExpect(status().isInternalServerError())
-        .andExpect(jsonPath("$.success").value(false))
-        .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+        .perform(get("/api/v1/menus").accept(MediaType.APPLICATION_XML))
+        .andExpect(status().isNotAcceptable());
 
     assertEquals("health", environment.getProperty("management.endpoints.web.exposure.include"));
     assertEquals("never", environment.getProperty("management.endpoint.health.show-details"));

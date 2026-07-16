@@ -3,14 +3,15 @@ package com.example.coffeeordersystem.common.error;
 import com.example.coffeeordersystem.common.api.ApiResponse;
 import com.example.coffeeordersystem.common.observability.DatabaseContentionMetrics;
 import com.example.coffeeordersystem.common.observability.RequestCorrelation;
-import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -69,13 +70,20 @@ public class GlobalExceptionHandler {
   }
 
   @ExceptionHandler(NoResourceFoundException.class)
-  public ResponseEntity<?> handleNoResourceFound(
-      NoResourceFoundException exception, HttpServletRequest request) {
-    String requestUri = request.getRequestURI();
-    if (requestUri.equals("/actuator") || requestUri.startsWith("/actuator/")) {
-      return ResponseEntity.notFound().build();
-    }
-    return handleUnexpectedException(exception);
+  public ResponseEntity<Void> handleNoResourceFound(NoResourceFoundException exception) {
+    return ResponseEntity.notFound().build();
+  }
+
+  @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+  public ResponseEntity<Void> handleMethodNotSupported(
+      HttpRequestMethodNotSupportedException exception) {
+    return ResponseEntity.status(exception.getStatusCode()).build();
+  }
+
+  @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+  public ResponseEntity<Void> handleMediaTypeNotAcceptable(
+      HttpMediaTypeNotAcceptableException exception) {
+    return ResponseEntity.status(exception.getStatusCode()).build();
   }
 
   @ExceptionHandler(Exception.class)

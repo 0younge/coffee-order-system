@@ -1,5 +1,6 @@
 package com.example.coffeeordersystem.point;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -83,7 +84,8 @@ class PointApiTest {
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.success").value(false))
         .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"))
-        .andExpect(jsonPath("$.data").doesNotExist());
+        .andExpect(jsonPath("$.data").hasJsonPath())
+        .andExpect(jsonPath("$.data").value(nullValue()));
 
     assertEquals(
         0L, count("SELECT COUNT(*) FROM idempotency_records WHERE user_id = " + missingUserId));
@@ -169,7 +171,8 @@ class PointApiTest {
           .andExpect(status().isConflict())
           .andExpect(jsonPath("$.success").value(false))
           .andExpect(jsonPath("$.code").value("POINT_BALANCE_OVERFLOW"))
-          .andExpect(jsonPath("$.data").doesNotExist());
+          .andExpect(jsonPath("$.data").hasJsonPath())
+          .andExpect(jsonPath("$.data").value(nullValue()));
     }
 
     assertEquals(Long.MAX_VALUE, balance());
@@ -245,7 +248,8 @@ class PointApiTest {
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
         .andExpect(jsonPath("$.success").value(false))
         .andExpect(jsonPath("$.code").value(errorCode))
-        .andExpect(jsonPath("$.data").doesNotExist());
+        .andExpect(jsonPath("$.data").hasJsonPath())
+        .andExpect(jsonPath("$.data").value(nullValue()));
   }
 
   private String body(String amount) {
