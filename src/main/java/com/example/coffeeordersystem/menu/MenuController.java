@@ -1,0 +1,23 @@
+package com.example.coffeeordersystem.menu;
+
+import com.example.coffeeordersystem.common.api.ApiResponse;
+import java.util.List;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/v1/menus")
+class MenuController {
+
+  private final MenuService menuService;
+
+  MenuController(MenuService menuService) {
+    this.menuService = menuService;
+  }
+
+  @GetMapping
+  ApiResponse<List<MenuResponse>> findAll() {
+    return ApiResponse.success("MENUS_RETRIEVED", "메뉴 목록을 조회했습니다.", menuService.findAll());
+  }
+}
