@@ -1,24 +1,23 @@
-package com.example.coffeeordersystem.idempotency;
+package com.example.coffeeordersystem.idempotency.infrastructure;
 
+import com.example.coffeeordersystem.common.api.ApiResponseJsonCodec;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Optional;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-@RequiredArgsConstructor
+@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 @Repository
-class IdempotencyRepository {
+public class IdempotencyRepository {
 
   private final JdbcTemplate jdbcTemplate;
+  private final ApiResponseJsonCodec responseJsonCodec;
 
-  void upsert(
-      long userId,
-      IdempotencyOperation operation,
-      String idempotencyKey,
-      String requestHash,
-      Instant now) {
+  public void upsert(
+      long userId, String operationType, String idempotencyKey, String requestHash, Instant now) {
     Timestamp timestamp = Timestamp.from(now);
     jdbcTemplate.update(
         "INSERT INTO idempotency_records "
@@ -26,15 +25,15 @@ class IdempotencyRepository {
             + "created_at, updated_at) VALUES (?, ?, ?, ?, 'PROCESSING', ?, ?) "
             + "ON DUPLICATE KEY UPDATE id = id",
         userId,
-        operation.name(),
+        operationType,
         idempotencyKey,
         requestHash,
         timestamp,
         timestamp);
   }
 
-  Optional<IdempotencyRecord> findForUpdate(
-      long userId, IdempotencyOperation operation, String idempotencyKey) {
+  public Optional<IdempotencyRecord> findForUpdate(
+      long userId, String operationType, String idempotencyKey) {
     return jdbcTemplate
         .query(
             "SELECT id, request_hash, status, http_status, response_body "
@@ -47,15 +46,15 @@ class IdempotencyRepository {
                     resultSet.getString("request_hash"),
                     resultSet.getString("status"),
                     (Integer) resultSet.getObject("http_status"),
-                    resultSet.getString("response_body")),
+                    compact(resultSet.getString("response_body"))),
             userId,
-            operation.name(),
+            operationType,
             idempotencyKey)
         .stream()
         .findFirst();
   }
 
-  void complete(
+  public String complete(
       long recordId, int httpStatus, String resultCode, String responseBody, Instant completedAt) {
     Timestamp timestamp = Timestamp.from(completedAt);
     int updated =
@@ -72,8 +71,16 @@ class IdempotencyRepository {
     if (updated != 1) {
       throw new IllegalStateException("처리 중인 멱등 레코드를 완료할 수 없습니다.");
     }
+    String storedResponseBody =
+        jdbcTemplate.queryForObject(
+            "SELECT response_body FROM idempotency_records WHERE id = ?", String.class, recordId);
+    return compact(storedResponseBody);
   }
 
-  record IdempotencyRecord(
+  private String compact(String responseBody) {
+    return responseBody == null ? null : responseJsonCodec.compact(responseBody);
+  }
+
+  public record IdempotencyRecord(
       long id, String requestHash, String status, Integer httpStatus, String responseBody) {}
 }

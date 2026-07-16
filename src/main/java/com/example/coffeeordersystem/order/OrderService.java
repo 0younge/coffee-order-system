@@ -1,12 +1,13 @@
 package com.example.coffeeordersystem.order;
 
 import com.example.coffeeordersystem.common.api.ApiResponse;
+import com.example.coffeeordersystem.common.api.ApiResponseJsonCodec;
 import com.example.coffeeordersystem.common.error.ErrorCode;
 import com.example.coffeeordersystem.common.observability.BusinessEventLogger;
-import com.example.coffeeordersystem.idempotency.IdempotencyClaim;
-import com.example.coffeeordersystem.idempotency.IdempotencyOperation;
-import com.example.coffeeordersystem.idempotency.IdempotencyService;
-import com.example.coffeeordersystem.idempotency.RequestHasher;
+import com.example.coffeeordersystem.idempotency.application.IdempotencyClaim;
+import com.example.coffeeordersystem.idempotency.application.IdempotencyFacade;
+import com.example.coffeeordersystem.idempotency.application.IdempotencyOperation;
+import com.example.coffeeordersystem.idempotency.application.RequestHasher;
 import com.example.coffeeordersystem.menu.MenuResponse;
 import com.example.coffeeordersystem.menu.MenuService;
 import com.example.coffeeordersystem.outbox.OutboxEventWriter;
@@ -19,20 +20,18 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 @RequiredArgsConstructor
 @Service
 class OrderService {
 
   private final PointPaymentService pointPaymentService;
-  private final IdempotencyService idempotencyService;
+  private final IdempotencyFacade idempotencyFacade;
   private final RequestHasher requestHasher;
   private final MenuService menuService;
   private final OrderRepository orderRepository;
   private final OutboxEventWriter outboxEventWriter;
-  private final ObjectMapper objectMapper;
+  private final ApiResponseJsonCodec responseJsonCodec;
   private final Clock clock;
   private final BusinessEventLogger businessEventLogger;
 
@@ -43,7 +42,7 @@ class OrderService {
 
     String requestHash = requestHasher.hash(IdempotencyOperation.ORDER, command.menuId());
     IdempotencyClaim claim =
-        idempotencyService.claim(
+        idempotencyFacade.claim(
             command.userId(),
             IdempotencyOperation.ORDER,
             command.idempotencyKey(),
@@ -53,7 +52,8 @@ class OrderService {
       if (!claim.requestHash().equals(requestHash)) {
         return failure(ErrorCode.IDEMPOTENCY_KEY_REUSED);
       }
-      return new OrderResult(claim.httpStatus(), claim.responseBody());
+      return new OrderResult(
+          claim.httpStatus(), responseJsonCodec.read(claim.responseBody()), claim.responseBody());
     }
 
     MenuResponse menu = menuService.findById(command.menuId()).orElse(null);
@@ -74,33 +74,38 @@ class OrderService {
         success(
             new OrderResponse(
                 order.id(), menu.menuId(), menu.name(), menu.price(), pointBalance.balance(), now));
-    complete(claim, result, "ORDER_PAID", now);
+    result = complete(claim, result, "ORDER_PAID", now);
     businessEventLogger.orderPaid(command.userId(), order.id(), eventId);
     return result;
   }
 
   private OrderResult success(OrderResponse data) {
-    JsonNode body =
-        objectMapper.valueToTree(ApiResponse.success("ORDER_PAID", "주문과 결제가 완료되었습니다.", data));
-    return new OrderResult(HttpStatus.CREATED.value(), body);
+    return response(
+        HttpStatus.CREATED.value(), ApiResponse.success("ORDER_PAID", "주문과 결제가 완료되었습니다.", data));
   }
 
   private OrderResult completeFailure(
       IdempotencyClaim claim, ErrorCode errorCode, Instant completedAt) {
     OrderResult result = failure(errorCode);
-    complete(claim, result, errorCode.name(), completedAt);
-    return result;
+    return complete(claim, result, errorCode.name(), completedAt);
   }
 
   private OrderResult failure(ErrorCode errorCode) {
-    JsonNode body =
-        objectMapper.valueToTree(ApiResponse.failure(errorCode.name(), errorCode.message()));
-    return new OrderResult(errorCode.httpStatus().value(), body);
+    return response(
+        errorCode.httpStatus().value(), ApiResponse.failure(errorCode.name(), errorCode.message()));
   }
 
-  private void complete(
+  private OrderResult response(int httpStatus, Object response) {
+    String responseBody = responseJsonCodec.write(response);
+    return new OrderResult(httpStatus, responseJsonCodec.read(responseBody), responseBody);
+  }
+
+  private OrderResult complete(
       IdempotencyClaim claim, OrderResult result, String resultCode, Instant completedAt) {
-    idempotencyService.complete(
-        claim.recordId(), result.httpStatus(), resultCode, result.body(), completedAt);
+    String storedResponseBody =
+        idempotencyFacade.complete(
+            claim.recordId(), result.httpStatus(), resultCode, result.responseBody(), completedAt);
+    return new OrderResult(
+        result.httpStatus(), responseJsonCodec.read(storedResponseBody), storedResponseBody);
   }
 }

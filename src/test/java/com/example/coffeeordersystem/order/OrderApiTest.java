@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.coffeeordersystem.common.api.ApiResponseJsonCodec;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
@@ -43,6 +44,8 @@ class OrderApiTest {
   @Autowired private JdbcTemplate jdbcTemplate;
 
   @Autowired private ObjectMapper objectMapper;
+
+  @Autowired private ApiResponseJsonCodec responseJsonCodec;
 
   @MockitoBean private Clock clock;
 
@@ -319,27 +322,29 @@ class OrderApiTest {
   void reusesSameOrderRequest() throws Exception {
     String key = UUID.randomUUID().toString();
 
-    String firstResponse =
+    MvcResult first =
         mockMvc
             .perform(order(key, body(menuId)))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.code").value("ORDER_PAID"))
             .andExpect(jsonPath("$.data.remainingBalance").value(1_000L))
-            .andReturn()
-            .getResponse()
-            .getContentAsString();
+            .andReturn();
     jdbcTemplate.update("UPDATE menus SET name = '변경된 메뉴', price = 9000 WHERE id = ?", menuId);
     jdbcTemplate.update("UPDATE users SET point_balance = 777 WHERE id = ?", userId);
 
-    String replayResponse =
-        mockMvc
-            .perform(order(key, body(menuId)))
-            .andExpect(status().isCreated())
-            .andReturn()
-            .getResponse()
-            .getContentAsString();
+    MvcResult replay =
+        mockMvc.perform(order(key, body(menuId))).andExpect(status().isCreated()).andReturn();
 
-    assertEquals(objectMapper.readTree(firstResponse), objectMapper.readTree(replayResponse));
+    String firstBody = first.getResponse().getContentAsString();
+    assertEquals(first.getResponse().getStatus(), replay.getResponse().getStatus());
+    assertEquals(firstBody, replay.getResponse().getContentAsString());
+    assertEquals(
+        firstBody,
+        responseJsonCodec.compact(
+            jdbcTemplate.queryForObject(
+                "SELECT response_body FROM idempotency_records WHERE user_id = ?",
+                String.class,
+                userId)));
     assertEquals(777L, balance());
     assertEquals(1L, orderCount());
     assertEquals(1L, outboxCount());

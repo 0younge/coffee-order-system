@@ -58,11 +58,18 @@ class LayeredArchitectureTest {
 
     for (SourceFile source : sources) {
       verifyControllerDoesNotUsePersistence(source, persistenceTypes);
+      verifyApplicationIndependence(source);
       verifyDomainIndependence(source);
       verifyCrossFeatureBoundary(source);
     }
 
     assertFalse(hasFeatureCycle(dependencies), "기능 간 순환 의존이 없어야 합니다: " + dependencies);
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("idempotency/application/IdempotencyFacade.java")),
+        "Idempotency는 공개 Application Facade를 제공해야 합니다.");
+    assertFalse(
+        Files.exists(MAIN_SOURCE.resolve("idempotency/IdempotencyService.java")),
+        "IdempotencyFacade 뒤에 기존 Service 위임 계층을 남길 수 없습니다.");
   }
 
   @Test
@@ -239,6 +246,23 @@ class LayeredArchitectureTest {
       assertFalse(
           source.contents().contains(forbidden),
           source.path() + " domain은 " + forbidden + "에 의존할 수 없습니다.");
+    }
+  }
+
+  private void verifyApplicationIndependence(SourceFile source) {
+    if (!normalized(source.path()).contains("/application/")) {
+      return;
+    }
+    for (String forbidden :
+        List.of(
+            ".api.",
+            "org.springframework.web",
+            "org.springframework.http",
+            "tools.jackson",
+            "com.fasterxml.jackson")) {
+      assertFalse(
+          source.contents().contains(forbidden),
+          source.path() + " application은 API 표현 기술 " + forbidden + "에 의존할 수 없습니다.");
     }
   }
 

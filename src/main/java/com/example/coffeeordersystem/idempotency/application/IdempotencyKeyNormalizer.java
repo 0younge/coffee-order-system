@@ -1,4 +1,4 @@
-package com.example.coffeeordersystem.idempotency;
+package com.example.coffeeordersystem.idempotency.application;
 
 import com.example.coffeeordersystem.common.error.ApiException;
 import com.example.coffeeordersystem.common.error.ErrorCode;

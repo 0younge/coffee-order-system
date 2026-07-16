@@ -7,8 +7,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.example.coffeeordersystem.idempotency.IdempotencyService;
-import com.example.coffeeordersystem.idempotency.RequestHasher;
+import com.example.coffeeordersystem.idempotency.application.IdempotencyFacade;
+import com.example.coffeeordersystem.idempotency.application.RequestHasher;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -53,7 +53,7 @@ class PointDeadlockApiTest {
 
   @Autowired private MeterRegistry meterRegistry;
 
-  @MockitoSpyBean private IdempotencyService idempotencyService;
+  @MockitoSpyBean private IdempotencyFacade idempotencyFacade;
 
   private long userId;
   private long auxiliaryUserStart;
@@ -97,7 +97,7 @@ class PointDeadlockApiTest {
               assertTrue(serviceMayClaim.await(2, TimeUnit.SECONDS));
               return invocation.callRealMethod();
             })
-        .when(idempotencyService)
+        .when(idempotencyFacade)
         .claim(
             org.mockito.ArgumentMatchers.anyLong(),
             org.mockito.ArgumentMatchers.any(),
@@ -182,7 +182,8 @@ class PointDeadlockApiTest {
         userId,
         idempotencyKey,
         requestHasher.hash(
-            com.example.coffeeordersystem.idempotency.IdempotencyOperation.CHARGE, 100L),
+            com.example.coffeeordersystem.idempotency.application.IdempotencyOperation.CHARGE,
+            100L),
         now,
         now);
   }

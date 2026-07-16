@@ -1,4 +1,4 @@
-package com.example.coffeeordersystem.idempotency;
+package com.example.coffeeordersystem.idempotency.application;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

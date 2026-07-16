@@ -2,7 +2,7 @@ package com.example.coffeeordersystem.order;
 
 import com.example.coffeeordersystem.common.error.ApiException;
 import com.example.coffeeordersystem.common.error.ErrorCode;
-import com.example.coffeeordersystem.idempotency.IdempotencyKeyNormalizer;
+import com.example.coffeeordersystem.idempotency.application.IdempotencyKeyNormalizer;
 
 record OrderCommand(long userId, long menuId, String idempotencyKey) {
 

@@ -2,7 +2,7 @@ package com.example.coffeeordersystem.point;
 
 import com.example.coffeeordersystem.common.error.ApiException;
 import com.example.coffeeordersystem.common.error.ErrorCode;
-import com.example.coffeeordersystem.idempotency.IdempotencyKeyNormalizer;
+import com.example.coffeeordersystem.idempotency.application.IdempotencyKeyNormalizer;
 import java.math.BigInteger;
 
 record ChargeCommand(long userId, long amount, String idempotencyKey) {

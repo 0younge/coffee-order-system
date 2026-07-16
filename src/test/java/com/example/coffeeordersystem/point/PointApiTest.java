@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.coffeeordersystem.common.api.ApiResponseJsonCodec;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Locale;
@@ -23,6 +24,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -34,6 +36,8 @@ class PointApiTest {
   @Autowired private MockMvc mockMvc;
 
   @Autowired private JdbcTemplate jdbcTemplate;
+
+  @Autowired private ApiResponseJsonCodec responseJsonCodec;
 
   private long userId;
 
@@ -189,13 +193,31 @@ class PointApiTest {
     String key = UUID.randomUUID().toString();
     String request = body("250");
 
-    for (int attempt = 0; attempt < 2; attempt++) {
-      mockMvc
-          .perform(charge(key, request))
-          .andExpect(status().isOk())
-          .andExpect(jsonPath("$.code").value("POINT_CHARGED"))
-          .andExpect(jsonPath("$.data.balance").value(350));
-    }
+    MvcResult first =
+        mockMvc
+            .perform(charge(key, request))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("POINT_CHARGED"))
+            .andExpect(jsonPath("$.data.balance").value(350))
+            .andReturn();
+    MvcResult replay =
+        mockMvc
+            .perform(charge(key, request))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("POINT_CHARGED"))
+            .andExpect(jsonPath("$.data.balance").value(350))
+            .andReturn();
+
+    String firstBody = first.getResponse().getContentAsString();
+    assertEquals(first.getResponse().getStatus(), replay.getResponse().getStatus());
+    assertEquals(firstBody, replay.getResponse().getContentAsString());
+    assertEquals(
+        firstBody,
+        responseJsonCodec.compact(
+            jdbcTemplate.queryForObject(
+                "SELECT response_body FROM idempotency_records WHERE user_id = ?",
+                String.class,
+                userId)));
 
     assertEquals(350L, balance());
     assertEquals(1L, idempotencyCount());

@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.example.coffeeordersystem.idempotency.IdempotencyService;
+import com.example.coffeeordersystem.idempotency.application.IdempotencyFacade;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
@@ -28,7 +28,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
-import tools.jackson.databind.JsonNode;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -41,7 +40,7 @@ class PointAtomicityApiTest {
 
   @Autowired private JdbcTemplate jdbcTemplate;
 
-  @MockitoSpyBean private IdempotencyService idempotencyService;
+  @MockitoSpyBean private IdempotencyFacade idempotencyFacade;
 
   private long userId;
 
@@ -70,8 +69,8 @@ class PointAtomicityApiTest {
               invocation.callRealMethod();
               throw new DataAccessResourceFailureException("테스트용 결과 저장 후 장애");
             })
-        .when(idempotencyService)
-        .complete(anyLong(), anyInt(), anyString(), any(JsonNode.class), any(Instant.class));
+        .when(idempotencyFacade)
+        .complete(anyLong(), anyInt(), anyString(), anyString(), any(Instant.class));
 
     mockMvc
         .perform(

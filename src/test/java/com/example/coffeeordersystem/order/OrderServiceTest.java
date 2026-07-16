@@ -8,11 +8,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.example.coffeeordersystem.common.api.ApiResponseJsonCodec;
 import com.example.coffeeordersystem.common.observability.BusinessEventLogger;
-import com.example.coffeeordersystem.idempotency.IdempotencyClaim;
-import com.example.coffeeordersystem.idempotency.IdempotencyOperation;
-import com.example.coffeeordersystem.idempotency.IdempotencyService;
-import com.example.coffeeordersystem.idempotency.RequestHasher;
+import com.example.coffeeordersystem.idempotency.application.IdempotencyClaim;
+import com.example.coffeeordersystem.idempotency.application.IdempotencyFacade;
+import com.example.coffeeordersystem.idempotency.application.IdempotencyOperation;
+import com.example.coffeeordersystem.idempotency.application.RequestHasher;
 import com.example.coffeeordersystem.menu.MenuResponse;
 import com.example.coffeeordersystem.menu.MenuService;
 import com.example.coffeeordersystem.outbox.OutboxEventWriter;
@@ -29,7 +30,6 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 class OrderServiceTest {
 
@@ -37,12 +37,12 @@ class OrderServiceTest {
   @DisplayName("CT-ORDER-001 사용자 락을 얻은 뒤 결제 시각을 확정한다")
   void capturesPaymentTimeAfterUserLock() throws Exception {
     PointPaymentService pointPaymentService = mock(PointPaymentService.class);
-    IdempotencyService idempotencyService = mock(IdempotencyService.class);
+    IdempotencyFacade idempotencyFacade = mock(IdempotencyFacade.class);
     RequestHasher requestHasher = mock(RequestHasher.class);
     MenuService menuService = mock(MenuService.class);
     OrderRepository orderRepository = mock(OrderRepository.class);
     OutboxEventWriter outboxEventWriter = mock(OutboxEventWriter.class);
-    ObjectMapper objectMapper = mock(ObjectMapper.class);
+    ApiResponseJsonCodec responseJsonCodec = mock(ApiResponseJsonCodec.class);
     Clock clock = mock(Clock.class);
     BusinessEventLogger businessEventLogger = mock(BusinessEventLogger.class);
     LockedPointBalance pointBalance = mock(LockedPointBalance.class);
@@ -60,7 +60,7 @@ class OrderServiceTest {
             });
     when(clock.instant()).thenReturn(clockInstant);
     when(requestHasher.hash(IdempotencyOperation.ORDER, 2L)).thenReturn("request-hash");
-    when(idempotencyService.claim(
+    when(idempotencyFacade.claim(
             1L, IdempotencyOperation.ORDER, "idempotency-key", "request-hash", paidAt))
         .thenReturn(new IdempotencyClaim(3L, "request-hash", "PROCESSING", null, null));
     when(menuService.findById(2L)).thenReturn(Optional.of(new MenuResponse(2L, "메뉴", 4_000L)));
@@ -70,17 +70,18 @@ class OrderServiceTest {
     when(savedOrder.id()).thenReturn(4L);
     when(orderRepository.save(any(Order.class))).thenReturn(savedOrder);
     when(outboxEventWriter.appendOrderPaid(4L, 1L, 2L, 4_000L, paidAt)).thenReturn("event-id");
-    doReturn(mock(JsonNode.class)).when(objectMapper).valueToTree(any());
+    when(responseJsonCodec.write(any())).thenReturn("response-body");
+    doReturn(mock(JsonNode.class)).when(responseJsonCodec).read("response-body");
 
     OrderService orderService =
         new OrderService(
             pointPaymentService,
-            idempotencyService,
+            idempotencyFacade,
             requestHasher,
             menuService,
             orderRepository,
             outboxEventWriter,
-            objectMapper,
+            responseJsonCodec,
             clock,
             businessEventLogger);
     ExecutorService executor = Executors.newSingleThreadExecutor();
