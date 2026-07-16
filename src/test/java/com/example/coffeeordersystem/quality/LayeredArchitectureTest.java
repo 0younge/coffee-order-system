@@ -57,6 +57,7 @@ class LayeredArchitectureTest {
     Set<String> persistenceTypes = persistenceTypeNames(sources);
 
     for (SourceFile source : sources) {
+      verifyPackageMatchesPath(source);
       verifyProjectSourceLocation(source);
       verifyControllerDoesNotUsePersistence(source, persistenceTypes);
       verifyControllerUsesOwnFacadeOnly(source);
@@ -381,6 +382,25 @@ class LayeredArchitectureTest {
             "order/application/LegacyPointCaller.java",
             "import com.example.coffeeordersystem.point.LegacyPointService;");
     assertThrows(AssertionError.class, () -> verifyCrossFeatureBoundary(crossFeatureFlatLeak));
+    SourceFile mismatchedPackage =
+        syntheticSource(
+            "order/application/MisplacedOrder.java",
+            "package com.example.coffeeordersystem.order.domain;\nclass MisplacedOrder {}");
+    assertThrows(AssertionError.class, () -> verifyPackageMatchesPath(mismatchedPackage));
+    SourceFile controllerWithStaticServiceCall =
+        syntheticSource(
+            "menu/api/StaticServiceController.java",
+            "package com.example.coffeeordersystem.menu.api;\n"
+                + "import com.example.coffeeordersystem.menu.application.MenuQueryFacade;\n"
+                + "import com.example.coffeeordersystem.menu.application.MenuQueryService;\n"
+                + "@org.springframework.web.bind.annotation.RestController\n"
+                + "class StaticServiceController {\n"
+                + "  private final MenuQueryFacade menuQueryFacade;\n"
+                + "  void query() { MenuQueryService.findAll(); }\n"
+                + "}");
+    assertThrows(
+        AssertionError.class,
+        () -> verifyControllerUsesOwnFacadeOnly(controllerWithStaticServiceCall));
     SourceFile menuControllerWithExtraDependency =
         syntheticSource(
             "menu/api/MenuController.java",
@@ -577,6 +597,7 @@ class LayeredArchitectureTest {
                     + facadeType
                     + ";"),
         source.path() + " Controller는 자기 기능의 Application Facade를 사용해야 합니다.");
+    verifyControllerApplicationReferences(source, sourceFeature, facadeType);
     String className = source.path().getFileName().toString().replaceFirst("\\.java$", "");
     assertFalse(
         Pattern.compile(
@@ -608,6 +629,26 @@ class LayeredArchitectureTest {
             })
         .map(String::trim)
         .toList();
+  }
+
+  private void verifyControllerApplicationReferences(
+      SourceFile source, String sourceFeature, String facadeType) {
+    Matcher references =
+        Pattern.compile(
+                "com\\.example\\.coffeeordersystem\\."
+                    + Pattern.quote(sourceFeature)
+                    + "\\.application\\.([A-Za-z_$][\\w$]*|\\*)")
+            .matcher(source.contents());
+    while (references.find()) {
+      String applicationType = references.group(1);
+      assertTrue(
+          applicationType.equals(facadeType)
+              || applicationType.endsWith("Command")
+              || applicationType.endsWith("Result"),
+          source.path()
+              + " Controller는 자기 Facade 호출과 Command·Result 변환만 할 수 있습니다: "
+              + applicationType);
+    }
   }
 
   private void verifyMenuControllerFacadeOnly(SourceFile source) {
@@ -793,6 +834,21 @@ class LayeredArchitectureTest {
       return;
     }
     fail(source.path() + " 전역 기술 계층이나 승인되지 않은 최상위 패키지를 둘 수 없습니다.");
+  }
+
+  private void verifyPackageMatchesPath(SourceFile source) {
+    Path relative = MAIN_SOURCE.relativize(source.path());
+    Path parent = relative.getParent();
+    String expectedPackage = "com.example.coffeeordersystem";
+    if (parent != null) {
+      expectedPackage += "." + parent.toString().replace('\\', '.').replace('/', '.');
+    }
+    Matcher declaration =
+        Pattern.compile("(?m)^package\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*);$")
+            .matcher(source.contents());
+    assertTrue(declaration.find(), source.path() + " package 선언이 필요합니다.");
+    assertEquals(
+        expectedPackage, declaration.group(1), source.path() + " package 선언은 파일 경로와 일치해야 합니다.");
   }
 
   private Map<String, Set<String>> featureDependencies(List<SourceFile> sources) {
