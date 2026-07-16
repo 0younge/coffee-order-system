@@ -494,6 +494,7 @@ class LayeredArchitectureTest {
             "org.springframework.web",
             "org.springframework.http",
             "org.springframework.jdbc",
+            "java.net.http",
             "tools.jackson",
             "com.fasterxml.jackson")) {
       assertFalse(

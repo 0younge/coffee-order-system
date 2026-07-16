@@ -23,6 +23,8 @@ public class OutboxHttpSender {
   private final HttpClient httpClient;
   private final URI endpoint;
   private final OutboxDeliveryClassifier classifier = new OutboxDeliveryClassifier();
+  private final OutboxTransportFailureClassifier transportFailureClassifier =
+      new OutboxTransportFailureClassifier();
 
   public OutboxHttpSender(
       @Qualifier("outboxHttpClient") HttpClient httpClient,
@@ -45,6 +47,6 @@ public class OutboxHttpSender {
             (response, throwable) ->
                 throwable == null
                     ? classifier.classify(response.statusCode())
-                    : classifier.classify(throwable));
+                    : transportFailureClassifier.classify(throwable));
   }
 }
