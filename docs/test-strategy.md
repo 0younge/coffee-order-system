@@ -58,7 +58,7 @@ ID 형식은 `<계층>-<영역>-<3자리 순번>`으로 고정한다. 예를 들
 
 Docker Compose는 MySQL만 실행한다. 애플리케이션과 Gradle 테스트는 호스트에서 실행해 디버깅과 반복 시간을 단순하게 유지한다. 개발과 테스트는 하나의 Compose MySQL 인스턴스를 사용하되 개발용 `coffee_order_system`과 테스트용 `coffee_order_system_test`를 분리한다. 자동 구현은 멱등적인 `docker/mysql/init/01-create-test-database.sh`를 `/docker-entrypoint-initdb.d/01-create-test-database.sh`에 연결해 신규 볼륨에서 두 데이터베이스와 애플리케이션 사용자의 권한을 준비한다. 기존 볼륨에 테스트 데이터베이스가 없으면 `docker compose exec mysql bash /docker-entrypoint-initdb.d/01-create-test-database.sh`를 한 번 실행한다. 이 절차는 데이터베이스와 권한만 멱등적으로 준비하고 개발 데이터나 볼륨을 삭제하지 않는다. 테스트 프로필은 개발 URL을 상속하지 않고 테스트 JDBC URL을 명시한다. 각 테스트는 실행별 고유 식별자로 만든 자기 데이터만 FK 순서에 맞춰 정리하며 전체 `TRUNCATE`, schema 삭제와 `Flyway clean`을 사용하지 않는다. 빈 DB 마이그레이션은 CI나 새 Compose 볼륨에서 검증한다.
 
-구현 단계에서 추가가 승인된 애플리케이션 의존성은 `spring-boot-starter-validation`, `spring-boot-starter-actuator`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`이다. 빌드 도구로는 Spotless 플러그인과 Java 포매터가 승인됐다. Mock HTTP, bounded polling과 동시성 실행은 JDK 표준 기능으로 구현하며 그 밖의 라이브러리는 추가 전에 다시 승인받는다.
+구현 단계에서 추가가 승인된 애플리케이션 의존성은 `spring-boot-starter-validation`, `spring-boot-starter-actuator`, Spring Boot 4의 Flyway 자동 구성 모듈인 `org.springframework.boot:spring-boot-flyway`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`이다. 빌드 도구로는 Spotless 플러그인과 Java 포매터가 승인됐다. Mock HTTP, bounded polling과 동시성 실행은 JDK 표준 기능으로 구현하며 그 밖의 라이브러리는 추가 전에 다시 승인받는다.
 
 ### 4.2 계층별 책임
 

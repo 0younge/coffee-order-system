@@ -4,7 +4,7 @@
 
 > **문서와 구현 상태**
 >
-> 이 저장소의 문서는 목표 계약 초안을 설명합니다. ADR별 승인 여부는 [ADR 목록](./docs/adr/)에서 관리합니다. 현재 코드는 Spring Boot 애플리케이션 부트스트랩, 기본 컨텍스트 테스트, MySQL Docker Compose와 DB 연결 설정만 존재하며, 도메인 기능·DB 스키마·Flyway·외부 연동 워커는 아직 구현되지 않았습니다. 문서에 적힌 동작을 현재 구현 완료 상태로 해석하지 않습니다.
+> 이 저장소의 문서는 목표 계약을 설명합니다. ADR별 승인 여부는 [ADR 목록](./docs/adr/)에서 관리합니다. 현재 코드는 Spring Boot 애플리케이션 기반선, MySQL Docker Compose, 개발·테스트 DB 분리, Flyway 스키마·기준 데이터, UTC·health·포맷 검증까지 구현됐습니다. 업무 API와 외부 연동 워커는 아직 구현되지 않았으므로 문서의 목표 동작 전체를 구현 완료 상태로 해석하지 않습니다.
 
 ## 과제 요구사항 대응
 
@@ -137,7 +137,7 @@ erDiagram
 | 입력 검증 | Spring Boot Validation |
 | 빌드 | Gradle 9.5.1 Wrapper |
 | 데이터베이스 | MySQL 8.4 LTS |
-| 스키마 변경 | Flyway (`flyway-core`, `flyway-mysql`) |
+| 스키마 변경 | Flyway (`spring-boot-flyway`, `flyway-core`, `flyway-mysql`) |
 | 테스트 | JUnit 5, 실제 MySQL 기반 통합 테스트, 외부 API Mock 서버 |
 | 관측성 | Spring Boot Actuator, Micrometer |
 | 코드 포맷 검사 | Gradle Spotless와 Java 포매터, `spotlessCheck`를 `check`에 포함 |
@@ -145,7 +145,7 @@ erDiagram
 
 버전 선택의 근거는 [ADR-0005](./docs/adr/0005-establish-java-spring-mysql-platform-baseline.md), 애플리케이션 구성 방식은 [ADR-0006](./docs/adr/0006-use-feature-oriented-modular-monolith.md)를 참고합니다.
 
-자동 구현 단계에서 추가가 승인된 애플리케이션 의존성은 `spring-boot-starter-validation`, `spring-boot-starter-actuator`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`뿐입니다. 빌드 도구로는 Spotless 플러그인과 Java 포매터가 추가 승인됐습니다. Mock HTTP, 비동기 HTTP와 bounded polling은 JDK 표준 기능을 사용하고 다른 라이브러리는 추가 전에 다시 확인합니다.
+자동 구현 단계에서 추가가 승인된 애플리케이션 의존성은 `spring-boot-starter-validation`, `spring-boot-starter-actuator`, Spring Boot 4의 Flyway 자동 구성 모듈인 `org.springframework.boot:spring-boot-flyway`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`뿐입니다. 빌드 도구로는 Spotless 플러그인과 Java 포매터가 추가 승인됐습니다. Mock HTTP, 비동기 HTTP와 bounded polling은 JDK 표준 기능을 사용하고 다른 라이브러리는 추가 전에 다시 확인합니다.
 
 첫 구현의 관측성은 Spring MVC의 `http.server.requests`, HikariCP 기본 지표, DB lock timeout·deadlock 카운터, Outbox 전송 결과·재시도·최종 실패·fencing 거절 카운터, `PENDING`·`FAILED` 건수와 가장 오래된 대기 이벤트 시간 gauge로 제한합니다. 요청·사용자·주문·이벤트 ID는 key-value 로그로 연결합니다. HTTP에는 상세 정보를 숨긴 `/actuator/health`만 노출하고 외부 exporter, JSON 로그 라이브러리와 알림 규칙은 추가하지 않습니다.
 

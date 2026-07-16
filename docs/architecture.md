@@ -2,7 +2,7 @@
 
 ## 1. 문서 상태와 범위
 
-이 문서는 사용자가 선택한 커피 주문 시스템의 **목표 아키텍처 초안**을 설명한다. ADR별 승인 여부는 [ADR 목록](./adr/)에서 관리하며, 저장소에는 Spring Boot 애플리케이션 부트스트랩, 기본 컨텍스트 테스트, MySQL Docker Compose와 DB 연결 설정이 있다. 아래 업무 모듈·테이블·트랜잭션·워커는 아직 구현 완료 상태가 아니다. 구현이 진행되면 코드, Flyway 마이그레이션, [ERD](./erd.md), [API 명세](./api-spec.md)가 이 문서와 일치하는지 함께 검증한다.
+이 문서는 사용자가 선택한 커피 주문 시스템의 **목표 아키텍처**를 설명한다. ADR별 승인 여부는 [ADR 목록](./adr/)에서 관리한다. 저장소에는 Spring Boot 애플리케이션 기반선, MySQL Docker Compose, 개발·테스트 DB 분리와 Flyway 스키마·기준 데이터가 구현됐고, 업무 모듈·트랜잭션·워커는 아직 구현 중이다. 구현이 진행되면 코드, Flyway 마이그레이션, [ERD](./erd.md), [API 명세](./api-spec.md)가 이 문서와 일치하는지 함께 검증한다.
 
 범위는 하나의 배포 단위로 실행되는 REST API 백엔드, 공용 MySQL, 그리고 애플리케이션 내부 Outbox 워커까지다. 실제 클라우드 배포, 로드 밸런서 제품 선택, MySQL 고가용성 구성, 외부 수집 시스템 구현은 범위 밖이다.
 
@@ -14,7 +14,7 @@
 | 프레임워크 | Spring Boot 4.1.0 | REST API, 트랜잭션, 데이터 접근 |
 | 빌드 | Gradle 9.5.1 | 빌드와 테스트 실행 |
 | 데이터베이스 | MySQL 8.4 LTS | 업무 데이터와 동시성 제어의 단일 진실 원천 |
-| 스키마 관리 | Flyway (`org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`) | 스키마·초기 메뉴·과제·로컬 기준 사용자의 버전 관리 |
+| 스키마 관리 | Flyway (`org.springframework.boot:spring-boot-flyway`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`) | 스키마·초기 메뉴·과제·로컬 기준 사용자의 버전 관리 |
 | 입력 검증 | Spring Boot Validation | Bean Validation 기반 요청 필드 검증 |
 | 관측성 | Spring Boot Actuator, Micrometer | health와 애플리케이션 지표 수집 |
 | 코드 포맷 검사 | Gradle Spotless와 Java 포매터 | `check`의 결정적 포맷 완료 게이트 |
@@ -33,7 +33,7 @@ docker compose up -d --wait
 
 Compose는 MySQL `8.4` 이미지 태그를 사용한다. JDBC 연결 풀 설정과 Flyway 파일 구성은 구현 시 정하되 위 기준선을 변경하지 않는다.
 
-현재 구현 단계에서 추가가 승인된 애플리케이션 의존성은 `spring-boot-starter-validation`, `spring-boot-starter-actuator`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`이다. 빌드 도구로는 Spotless 플러그인과 Java 포매터가 승인됐다. 외부 Mock API, 비동기 HTTP와 동시성 테스트는 JDK 표준 기능으로 구현하며 그 밖의 라이브러리는 추가 전에 다시 확인한다.
+현재 구현 단계에서 추가가 승인된 애플리케이션 의존성은 `spring-boot-starter-validation`, `spring-boot-starter-actuator`, Spring Boot 4의 Flyway 자동 구성 모듈인 `org.springframework.boot:spring-boot-flyway`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`이다. 빌드 도구로는 Spotless 플러그인과 Java 포매터가 승인됐다. 외부 Mock API, 비동기 HTTP와 동시성 테스트는 JDK 표준 기능으로 구현하며 그 밖의 라이브러리는 추가 전에 다시 확인한다.
 
 통합 테스트는 같은 Compose MySQL 인스턴스의 `coffee_order_system_test`를 사용해 개발 데이터베이스와 분리한다. 자동 구현은 멱등적인 `docker/mysql/init/01-create-test-database.sh`를 MySQL 초기화 디렉터리에 연결해 신규 볼륨의 테스트 DB와 권한을 자동 준비한다. 기존 볼륨은 같은 스크립트를 컨테이너 안에서 명시적으로 한 번 실행하며 볼륨과 개발 데이터는 삭제하지 않는다. 일반 테스트에서는 Outbox 워커를 비활성화하고 Outbox 전용 테스트에서만 Mock HTTP 서버와 함께 활성화한다. 다중 인스턴스 테스트는 서로 다른 랜덤 포트의 독립 Spring Context 두 개가 같은 테스트 DB를 사용한다.
 

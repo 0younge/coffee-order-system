@@ -17,11 +17,15 @@ class BuildConfigurationTest {
     String build = Files.readString(Path.of("build.gradle"));
     String wrapper = Files.readString(Path.of("gradle/wrapper/gradle-wrapper.properties"));
     String compose = Files.readString(Path.of("compose.yaml"));
+    String application = Files.readString(Path.of("src/main/resources/application.yaml"));
+    String testApplication = Files.readString(Path.of("src/test/resources/application-test.yaml"));
 
     assertTrue(build.contains("org.springframework.boot' version '4.1.0'"));
     assertTrue(build.contains("JavaLanguageVersion.of(17)"));
     assertTrue(wrapper.contains("gradle-9.5.1-bin.zip"));
     assertTrue(compose.contains("image: mysql:8.4"));
+    assertTrue(application.contains("connectionTimeZone=UTC"));
+    assertTrue(testApplication.contains("connectionTimeZone=UTC"));
   }
 
   @Test
@@ -66,10 +70,13 @@ class BuildConfigurationTest {
   @DisplayName("QT-SCHEMA-001 Flyway migration이 ERD의 테이블과 필드를 포함한다")
   void migrationContainsDocumentedSchema() throws IOException {
     String erd = Files.readString(Path.of("docs/erd.md"));
-    String migration =
+    String initialMigration =
         Files.readString(
             Path.of(
                 "src/main/resources/db/migration/V1__create_schema_and_seed_reference_data.sql"));
+    String lifecycleMigration =
+        Files.readString(
+            Path.of("src/main/resources/db/migration/V2__make_lifecycle_codes_case_sensitive.sql"));
     String[] schemaNames = {
       "users",
       "menus",
@@ -89,7 +96,8 @@ class BuildConfigurationTest {
 
     for (String schemaName : schemaNames) {
       assertTrue(erd.contains(schemaName));
-      assertTrue(migration.contains(schemaName));
+      assertTrue(initialMigration.contains(schemaName));
     }
+    assertTrue(lifecycleMigration.contains("CHARACTER SET ascii COLLATE ascii_bin"));
   }
 }
