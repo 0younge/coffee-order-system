@@ -54,7 +54,7 @@ public class IdempotencyRepository {
         .findFirst();
   }
 
-  public String complete(
+  public void complete(
       long recordId, int httpStatus, String resultCode, String responseBody, Instant completedAt) {
     Timestamp timestamp = Timestamp.from(completedAt);
     int updated =
@@ -71,10 +71,6 @@ public class IdempotencyRepository {
     if (updated != 1) {
       throw new IllegalStateException("처리 중인 멱등 레코드를 완료할 수 없습니다.");
     }
-    String storedResponseBody =
-        jdbcTemplate.queryForObject(
-            "SELECT response_body FROM idempotency_records WHERE id = ?", String.class, recordId);
-    return compact(storedResponseBody);
   }
 
   private String compact(String responseBody) {

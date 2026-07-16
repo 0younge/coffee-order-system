@@ -169,15 +169,26 @@ class PointApiTest {
     String key = UUID.randomUUID().toString();
     String request = body("1");
 
-    for (int attempt = 0; attempt < 2; attempt++) {
-      mockMvc
-          .perform(charge(key, request))
-          .andExpect(status().isConflict())
-          .andExpect(jsonPath("$.success").value(false))
-          .andExpect(jsonPath("$.code").value("POINT_BALANCE_OVERFLOW"))
-          .andExpect(jsonPath("$.data").hasJsonPath())
-          .andExpect(jsonPath("$.data").value(nullValue()));
-    }
+    MvcResult first =
+        mockMvc
+            .perform(charge(key, request))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.code").value("POINT_BALANCE_OVERFLOW"))
+            .andExpect(jsonPath("$.data").hasJsonPath())
+            .andExpect(jsonPath("$.data").value(nullValue()))
+            .andReturn();
+    MvcResult replay =
+        mockMvc
+            .perform(charge(key, request))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.code").value("POINT_BALANCE_OVERFLOW"))
+            .andExpect(jsonPath("$.data").hasJsonPath())
+            .andExpect(jsonPath("$.data").value(nullValue()))
+            .andReturn();
+
+    assertStoredResponseReused(first, replay);
 
     assertEquals(Long.MAX_VALUE, balance());
     assertEquals(1L, idempotencyCount());
@@ -208,16 +219,7 @@ class PointApiTest {
             .andExpect(jsonPath("$.data.balance").value(350))
             .andReturn();
 
-    String firstBody = first.getResponse().getContentAsString();
-    assertEquals(first.getResponse().getStatus(), replay.getResponse().getStatus());
-    assertEquals(firstBody, replay.getResponse().getContentAsString());
-    assertEquals(
-        firstBody,
-        responseJsonCodec.compact(
-            jdbcTemplate.queryForObject(
-                "SELECT response_body FROM idempotency_records WHERE user_id = ?",
-                String.class,
-                userId)));
+    assertStoredResponseReused(first, replay);
 
     assertEquals(350L, balance());
     assertEquals(1L, idempotencyCount());
@@ -288,6 +290,19 @@ class PointApiTest {
 
   private String body(String amount) {
     return "{\"userId\":" + userId + ",\"amount\":" + amount + "}";
+  }
+
+  private void assertStoredResponseReused(MvcResult first, MvcResult replay) throws Exception {
+    String firstBody = first.getResponse().getContentAsString();
+    assertEquals(first.getResponse().getStatus(), replay.getResponse().getStatus());
+    assertEquals(firstBody, replay.getResponse().getContentAsString());
+    assertEquals(
+        firstBody,
+        responseJsonCodec.compact(
+            jdbcTemplate.queryForObject(
+                "SELECT response_body FROM idempotency_records WHERE user_id = ?",
+                String.class,
+                userId)));
   }
 
   private void insertUser(long balance) {

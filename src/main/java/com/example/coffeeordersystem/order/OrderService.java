@@ -74,7 +74,7 @@ class OrderService {
         success(
             new OrderResponse(
                 order.id(), menu.menuId(), menu.name(), menu.price(), pointBalance.balance(), now));
-    result = complete(claim, result, "ORDER_PAID", now);
+    complete(claim, result, "ORDER_PAID", now);
     businessEventLogger.orderPaid(command.userId(), order.id(), eventId);
     return result;
   }
@@ -87,7 +87,8 @@ class OrderService {
   private OrderResult completeFailure(
       IdempotencyClaim claim, ErrorCode errorCode, Instant completedAt) {
     OrderResult result = failure(errorCode);
-    return complete(claim, result, errorCode.name(), completedAt);
+    complete(claim, result, errorCode.name(), completedAt);
+    return result;
   }
 
   private OrderResult failure(ErrorCode errorCode) {
@@ -100,12 +101,9 @@ class OrderService {
     return new OrderResult(httpStatus, responseJsonCodec.read(responseBody), responseBody);
   }
 
-  private OrderResult complete(
+  private void complete(
       IdempotencyClaim claim, OrderResult result, String resultCode, Instant completedAt) {
-    String storedResponseBody =
-        idempotencyFacade.complete(
-            claim.recordId(), result.httpStatus(), resultCode, result.responseBody(), completedAt);
-    return new OrderResult(
-        result.httpStatus(), responseJsonCodec.read(storedResponseBody), storedResponseBody);
+    idempotencyFacade.complete(
+        claim.recordId(), result.httpStatus(), resultCode, result.responseBody(), completedAt);
   }
 }

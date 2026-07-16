@@ -32,9 +32,8 @@ public class IdempotencyFacade {
         record.responseBody());
   }
 
-  public String complete(
+  public void complete(
       long recordId, int httpStatus, String resultCode, String responseBody, Instant completedAt) {
-    return idempotencyRepository.complete(
-        recordId, httpStatus, resultCode, responseBody, completedAt);
+    idempotencyRepository.complete(recordId, httpStatus, resultCode, responseBody, completedAt);
   }
 }

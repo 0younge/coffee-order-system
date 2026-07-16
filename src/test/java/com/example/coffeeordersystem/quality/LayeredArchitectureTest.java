@@ -98,6 +98,12 @@ class LayeredArchitectureTest {
             "point/domain/QualifiedHttpDomain.java",
             "class QualifiedHttpDomain { org.springframework.http.ResponseEntity<?> response; }");
     assertThrows(AssertionError.class, () -> verifyDomainIndependence(qualifiedHttpLeak));
+    SourceFile qualifiedApplicationJdbcLeak =
+        syntheticSource(
+            "idempotency/application/DirectJdbc.java",
+            "class DirectJdbc { org.springframework.jdbc.core.JdbcTemplate jdbc; }");
+    assertThrows(
+        AssertionError.class, () -> verifyApplicationIndependence(qualifiedApplicationJdbcLeak));
 
     SourceFile store =
         syntheticSource(
@@ -258,11 +264,13 @@ class LayeredArchitectureTest {
             ".api.",
             "org.springframework.web",
             "org.springframework.http",
+            "org.springframework.jdbc",
+            "JdbcTemplate",
             "tools.jackson",
             "com.fasterxml.jackson")) {
       assertFalse(
           source.contents().contains(forbidden),
-          source.path() + " application은 API 표현 기술 " + forbidden + "에 의존할 수 없습니다.");
+          source.path() + " application은 API 표현·DB 접근 기술 " + forbidden + "에 의존할 수 없습니다.");
     }
   }
 

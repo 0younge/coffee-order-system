@@ -54,12 +54,8 @@ class PointService {
     try {
       account.charge(command.amount(), now);
     } catch (ArithmeticException exception) {
-      PointChargeResult result =
-          complete(
-              claim,
-              failure(ErrorCode.POINT_BALANCE_OVERFLOW),
-              ErrorCode.POINT_BALANCE_OVERFLOW.name(),
-              now);
+      PointChargeResult result = failure(ErrorCode.POINT_BALANCE_OVERFLOW);
+      complete(claim, result, ErrorCode.POINT_BALANCE_OVERFLOW.name(), now);
       businessEventLogger.pointResult(command.userId(), ErrorCode.POINT_BALANCE_OVERFLOW.name());
       return result;
     }
@@ -69,7 +65,7 @@ class PointService {
             "POINT_CHARGED",
             "포인트를 충전했습니다.",
             new PointChargeResponse(command.amount(), account.pointBalance()));
-    result = complete(claim, result, "POINT_CHARGED", now);
+    complete(claim, result, "POINT_CHARGED", now);
     businessEventLogger.pointResult(command.userId(), "POINT_CHARGED");
     return result;
   }
@@ -88,12 +84,9 @@ class PointService {
     return new PointChargeResult(httpStatus, responseJsonCodec.read(responseBody), responseBody);
   }
 
-  private PointChargeResult complete(
+  private void complete(
       IdempotencyClaim claim, PointChargeResult result, String resultCode, Instant now) {
-    String storedResponseBody =
-        idempotencyFacade.complete(
-            claim.recordId(), result.httpStatus(), resultCode, result.responseBody(), now);
-    return new PointChargeResult(
-        result.httpStatus(), responseJsonCodec.read(storedResponseBody), storedResponseBody);
+    idempotencyFacade.complete(
+        claim.recordId(), result.httpStatus(), resultCode, result.responseBody(), now);
   }
 }

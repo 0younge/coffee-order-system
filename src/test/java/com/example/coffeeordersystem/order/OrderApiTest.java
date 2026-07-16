@@ -292,9 +292,9 @@ class OrderApiTest {
     String missingMenuKey = UUID.randomUUID().toString();
     long missingMenuId = menuId + 100_000L;
     jdbcTemplate.update("UPDATE users SET point_balance = 0 WHERE id = ?", userId);
-    for (int attempt = 0; attempt < 2; attempt++) {
-      expectError(missingMenuKey, body(missingMenuId), 404, "MENU_NOT_FOUND");
-    }
+    MvcResult first = expectError(missingMenuKey, body(missingMenuId), 404, "MENU_NOT_FOUND");
+    MvcResult replay = expectError(missingMenuKey, body(missingMenuId), 404, "MENU_NOT_FOUND");
+    assertStoredResponseReused(first, replay);
     assertEquals(0L, balance());
     assertEquals(1L, idempotencyCount());
     assertEquals(0L, orderCount());
@@ -307,9 +307,9 @@ class OrderApiTest {
     jdbcTemplate.update("UPDATE users SET point_balance = 3999 WHERE id = ?", userId);
     String key = UUID.randomUUID().toString();
 
-    for (int attempt = 0; attempt < 2; attempt++) {
-      expectError(key, body(menuId), 409, "INSUFFICIENT_POINT");
-    }
+    MvcResult first = expectError(key, body(menuId), 409, "INSUFFICIENT_POINT");
+    MvcResult replay = expectError(key, body(menuId), 409, "INSUFFICIENT_POINT");
+    assertStoredResponseReused(first, replay);
 
     assertEquals(3_999L, balance());
     assertEquals(0L, orderCount());
@@ -335,16 +335,7 @@ class OrderApiTest {
     MvcResult replay =
         mockMvc.perform(order(key, body(menuId))).andExpect(status().isCreated()).andReturn();
 
-    String firstBody = first.getResponse().getContentAsString();
-    assertEquals(first.getResponse().getStatus(), replay.getResponse().getStatus());
-    assertEquals(firstBody, replay.getResponse().getContentAsString());
-    assertEquals(
-        firstBody,
-        responseJsonCodec.compact(
-            jdbcTemplate.queryForObject(
-                "SELECT response_body FROM idempotency_records WHERE user_id = ?",
-                String.class,
-                userId)));
+    assertStoredResponseReused(first, replay);
     assertEquals(777L, balance());
     assertEquals(1L, orderCount());
     assertEquals(1L, outboxCount());
@@ -405,21 +396,35 @@ class OrderApiTest {
         .content(requestBody);
   }
 
-  private void expectError(
+  private MvcResult expectError(
       String idempotencyKey, String requestBody, int httpStatus, String errorCode)
       throws Exception {
-    mockMvc
+    return mockMvc
         .perform(order(idempotencyKey, requestBody))
         .andExpect(status().is(httpStatus))
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
         .andExpect(jsonPath("$.success").value(false))
         .andExpect(jsonPath("$.code").value(errorCode))
         .andExpect(jsonPath("$.data").hasJsonPath())
-        .andExpect(jsonPath("$.data").value(nullValue()));
+        .andExpect(jsonPath("$.data").value(nullValue()))
+        .andReturn();
   }
 
   private String body(long targetMenuId) {
     return "{\"userId\":" + userId + ",\"menuId\":" + targetMenuId + "}";
+  }
+
+  private void assertStoredResponseReused(MvcResult first, MvcResult replay) throws Exception {
+    String firstBody = first.getResponse().getContentAsString();
+    assertEquals(first.getResponse().getStatus(), replay.getResponse().getStatus());
+    assertEquals(firstBody, replay.getResponse().getContentAsString());
+    assertEquals(
+        firstBody,
+        responseJsonCodec.compact(
+            jdbcTemplate.queryForObject(
+                "SELECT response_body FROM idempotency_records WHERE user_id = ?",
+                String.class,
+                userId)));
   }
 
   private void insertUser(long balance) {

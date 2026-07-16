@@ -57,8 +57,6 @@ class PointServiceTest {
     JsonNode responseBody = mock(JsonNode.class);
     when(responseJsonCodec.write(any())).thenReturn("response-body");
     doReturn(responseBody).when(responseJsonCodec).read("response-body");
-    when(idempotencyFacade.complete(3L, 200, "POINT_CHARGED", "response-body", chargedAt))
-        .thenReturn("response-body");
 
     PointService pointService =
         new PointService(
