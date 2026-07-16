@@ -77,23 +77,15 @@ class LayeredArchitectureTest {
         Files.exists(MAIN_SOURCE.resolve("menu/application/MenuQueryFacade.java")),
         "Menu는 공개 Application Facade를 제공해야 합니다.");
     assertFalse(
-        Files.exists(MAIN_SOURCE.resolve("menu/MenuService.java"))
-            || Files.exists(MAIN_SOURCE.resolve("menu/PopularMenuService.java")),
+        sources.stream()
+            .filter(source -> normalized(source.path()).contains("/menu/"))
+            .map(source -> source.path().getFileName().toString())
+            .anyMatch(
+                name -> name.equals("MenuService.java") || name.equals("PopularMenuService.java")),
         "MenuQueryFacade 뒤에 기존 Service 위임 계층을 남길 수 없습니다.");
     String menuController = Files.readString(MAIN_SOURCE.resolve("menu/api/MenuController.java"));
-    assertTrue(
-        menuController.contains("MenuQueryFacade"), "MenuController는 MenuQueryFacade를 사용해야 합니다.");
-    assertEquals(
-        1,
-        menuController
-            .lines()
-            .filter(line -> line.contains("com.example.coffeeordersystem.menu.application."))
-            .count(),
-        "MenuController는 하나의 Application Facade만 참조해야 합니다.");
-    assertFalse(
-        menuController.contains("com.example.coffeeordersystem.menu.domain.")
-            || menuController.contains("com.example.coffeeordersystem.menu.infrastructure."),
-        "MenuController는 Menu Domain이나 Infrastructure를 직접 참조할 수 없습니다.");
+    verifyMenuControllerFacadeOnly(
+        new SourceFile(MAIN_SOURCE.resolve("menu/api/MenuController.java"), menuController));
     String orderService = Files.readString(MAIN_SOURCE.resolve("order/OrderService.java"));
     assertTrue(
         orderService.contains("menu.application.MenuQueryFacade")
@@ -134,6 +126,15 @@ class LayeredArchitectureTest {
             "class DirectJdbc { org.springframework.jdbc.core.JdbcTemplate jdbc; }");
     assertThrows(
         AssertionError.class, () -> verifyApplicationIndependence(qualifiedApplicationJdbcLeak));
+    SourceFile menuControllerWithExtraDependency =
+        syntheticSource(
+            "menu/api/MenuController.java",
+            "class MenuController {\n"
+                + " private final MenuQueryFacade menuQueryFacade;\n"
+                + " private final PointFacade pointFacade;\n}");
+    assertThrows(
+        AssertionError.class,
+        () -> verifyMenuControllerFacadeOnly(menuControllerWithExtraDependency));
 
     SourceFile store =
         syntheticSource(
@@ -263,6 +264,23 @@ class LayeredArchitectureTest {
           Pattern.compile("\\b" + Pattern.quote(type) + "\\b").matcher(source.contents()).find(),
           source.path() + " Controller는 저장소 역할 타입 " + type + "을 직접 참조할 수 없습니다.");
     }
+  }
+
+  private void verifyMenuControllerFacadeOnly(SourceFile source) {
+    assertTrue(
+        source.contents().contains("MenuQueryFacade"),
+        "MenuController는 MenuQueryFacade를 사용해야 합니다.");
+    assertEquals(
+        1,
+        source.contents().lines().filter(line -> line.contains("private final ")).count(),
+        "MenuController의 주입 의존성은 MenuQueryFacade 하나여야 합니다.");
+    assertTrue(
+        source.contents().contains("private final MenuQueryFacade menuQueryFacade;"),
+        "MenuController는 MenuQueryFacade를 생성자 주입해야 합니다.");
+    assertFalse(
+        source.contents().contains("com.example.coffeeordersystem.menu.domain.")
+            || source.contents().contains("com.example.coffeeordersystem.menu.infrastructure."),
+        "MenuController는 Menu Domain이나 Infrastructure를 직접 참조할 수 없습니다.");
   }
 
   private void verifyDomainIndependence(SourceFile source) {
