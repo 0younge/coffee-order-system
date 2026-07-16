@@ -42,6 +42,7 @@ spotless {
 
 tasks.named('test') {
     useJUnitPlatform()
+    inputs.files('README.md', fileTree('docs') { include '**/*.md' })
 }
 
 tasks.named('check') {

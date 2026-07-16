@@ -27,6 +27,7 @@ class TraceabilityTest {
   @DisplayName("QT-TRACE-001 README·요구사항·ADR·테스트 ID의 참조가 끊기지 않는다")
   void keepsDocumentationAndTestsTraceable() throws IOException {
     String readme = Files.readString(Path.of("README.md"));
+    String build = Files.readString(Path.of("build.gradle"));
     String prd = Files.readString(Path.of("docs/prd.md"));
     String testStrategy = Files.readString(Path.of("docs/test-strategy.md"));
     String traceability = Files.readString(Path.of("docs/requirements-traceability.md"));
@@ -49,6 +50,7 @@ class TraceabilityTest {
     assertTrue(
         implementedTestIds.stream().allMatch(traceability::contains),
         "구현된 모든 테스트 ID가 요구사항 추적표에 연결되어야 합니다.");
+    assertTrue(build.contains("inputs.files('README.md', fileTree('docs')"));
   }
 
   private void verifyLocalLinks(Path document, String contents) throws IOException {
