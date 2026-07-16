@@ -17,6 +17,7 @@ import com.example.coffeeordersystem.point.application.PointPaymentFacade;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -56,10 +57,11 @@ public class OrderFacade {
       return new OrderResult(claim.httpStatus(), claim.responseBody());
     }
 
-    MenuSnapshot menu = menuQueryFacade.findById(command.menuId()).orElse(null);
-    if (menu == null) {
+    Optional<MenuSnapshot> menuResult = menuQueryFacade.findById(command.menuId());
+    if (menuResult.isEmpty()) {
       return completeFailure(claim, ErrorCode.MENU_NOT_FOUND, now);
     }
+    MenuSnapshot menu = menuResult.get();
     if (!pointBalance.pay(menu.price(), now)) {
       return completeFailure(claim, ErrorCode.INSUFFICIENT_POINT, now);
     }
