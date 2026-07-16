@@ -47,7 +47,7 @@
 1. 구현: [build.gradle](../build.gradle), [compose.yaml](../compose.yaml), [application.yaml](../src/main/resources/application.yaml), [TimeConfiguration.java](../src/main/java/com/example/coffeeordersystem/config/TimeConfiguration.java), [Flyway V1](../src/main/resources/db/migration/V1__create_schema_and_seed_reference_data.sql), [Flyway V2](../src/main/resources/db/migration/V2__make_lifecycle_codes_case_sensitive.sql)
 2. 테스트: `IT-DB-001`~`004`, `IT-TIME-001`, `QT-CONFIG-002`~`003`, `QT-DEPS-001`, `QT-FORMAT-001`, `QT-SCHEMA-001` — [DatabaseMigrationTest.java](../src/test/java/com/example/coffeeordersystem/database/DatabaseMigrationTest.java), [TimeConfigurationTest.java](../src/test/java/com/example/coffeeordersystem/config/TimeConfigurationTest.java), [BuildConfigurationTest.java](../src/test/java/com/example/coffeeordersystem/quality/BuildConfigurationTest.java)
 3. 실행: 2026-07-16 MySQL 8.4 healthy에서 `docker compose config -q`, `./gradlew clean check build` 성공; 전체 15개, 성공 15개, 실패 0개, 제외 0개. `./gradlew bootRun` 시작 성공, `GET /actuator/health` 응답 `UP`
-4. 재현 커밋: `8b2c204`(기반선), `058a441`(리뷰 지적 보완); GitHub 작업 이슈 `#1`
+4. 재현 커밋: `8b2c204`(기반선), `058a441`(스키마·UTC 보완), `6a7049b`(로컬 UTC 회귀 방지); GitHub 작업 이슈 `#1`
 
 ## 3. 기능 요구사항 추적
 
