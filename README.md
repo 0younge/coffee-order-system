@@ -168,8 +168,8 @@ docker compose up -d --wait
 - 기존 볼륨에 테스트 데이터베이스가 없다면 구현된 초기화 스크립트를 `docker compose exec mysql bash /docker-entrypoint-initdb.d/01-create-test-database.sh`로 한 번 실행합니다. 이 절차는 데이터베이스와 권한을 멱등적으로 준비하며 볼륨이나 개발 데이터를 삭제하지 않습니다.
 - 기존 로컬 MySQL과의 충돌을 피하기 위해 기본 호스트 포트는 `3307`입니다.
 - 개발 데이터베이스 이름과 JDBC URL은 `DB_NAME`, `DB_URL`, 테스트 데이터베이스 이름과 JDBC URL은 `TEST_DB_NAME`, `TEST_DB_URL`로 재정의할 수 있습니다. 호스트 포트는 `DB_PORT`, 사용자명은 `DB_USERNAME`, 비밀번호는 `DB_PASSWORD`, MySQL root 비밀번호는 `DB_ROOT_PASSWORD`로 재정의합니다.
-- 외부 API 주소는 `COLLECTION_API_BASE_URL`로 주입하며 기본값이 없습니다. 누락되거나 잘못되면 애플리케이션 시작이 실패합니다.
-- Outbox 워커 활성화 여부는 `OUTBOX_WORKER_ENABLED`, 폴링 주기와 배치 크기는 `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`로 설정하며 기본값은 각각 `true`, `1000`, `50`입니다.
+- 외부 API 주소는 `COLLECTION_API_BASE_URL`로 주입하며 기본값이 없습니다. HTTP(S) URL의 명시 포트는 `1~65535`만 허용하고 기존 base path 뒤에 `events/orders`를 결합합니다. 누락되거나 잘못되면 애플리케이션 시작이 실패합니다.
+- Outbox 워커 활성화 여부는 `OUTBOX_WORKER_ENABLED`, 폴링 주기와 배치 크기는 `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`로 설정하며 기본값은 각각 `true`, `1000`, `50`입니다. 승인된 2초 최초 요청 계약을 지키기 위해 폴링 주기는 `1~1000ms`만 허용합니다.
 - 로컬에서는 저장소 루트의 `.env`를 Docker Compose와 Spring Boot가 함께 읽습니다. `.env`와 `.env.*`는 커밋하지 않고 키 목록과 안전한 예시만 `.env.example`로 관리합니다.
 - CI·운영에서는 `.env` 파일 대신 같은 이름의 시스템 환경 변수를 주입할 수 있으며, 시스템 환경 변수가 `.env` 값보다 우선합니다.
 - Flyway 구현 후 애플리케이션 시작 시 스키마, 초기 메뉴와 과제·로컬용 기준 사용자 `id=1`, `point_balance=0`을 적용합니다.

@@ -6,7 +6,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -33,20 +32,17 @@ class OutboxWorker {
       OutboxHttpSender httpSender,
       Clock clock,
       OutboxMetrics metrics,
-      @Value("${outbox.worker.batch-size:50}") int batchSize) {
-    if (batchSize <= 0) {
-      throw new IllegalArgumentException("Outbox 배치 크기는 1 이상이어야 합니다.");
-    }
+      OutboxWorkerSettings settings) {
     this.outboxStore = outboxStore;
     this.httpSender = httpSender;
     this.clock = clock;
     this.metrics = metrics;
-    this.batchSize = batchSize;
+    this.batchSize = settings.batchSize();
   }
 
   @Scheduled(
-      fixedDelayString = "${outbox.worker.poll-interval-ms:1000}",
-      initialDelayString = "${outbox.worker.poll-interval-ms:1000}")
+      fixedDelayString = "#{@outboxWorkerSettings.pollIntervalMillis()}",
+      initialDelayString = "#{@outboxWorkerSettings.pollIntervalMillis()}")
   void poll() {
     if (!active.compareAndSet(false, true)) {
       return;

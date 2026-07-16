@@ -25,7 +25,8 @@ class OutboxWorkerTest {
   private final OutboxStore outboxStore = mock(OutboxStore.class);
   private final OutboxHttpSender httpSender = mock(OutboxHttpSender.class);
   private final OutboxMetrics metrics = mock(OutboxMetrics.class);
-  private final OutboxWorker worker = new OutboxWorker(outboxStore, httpSender, CLOCK, metrics, 1);
+  private final OutboxWorker worker =
+      new OutboxWorker(outboxStore, httpSender, CLOCK, metrics, new OutboxWorkerSettings(1, 1000));
 
   @Test
   @DisplayName("QT-OBS-001 Outbox 선점 예외의 메시지와 내부 정보를 로그에 노출하지 않는다")

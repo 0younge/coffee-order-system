@@ -25,6 +25,15 @@ class OutboxWorkerConfigurationTest {
     assertEquals(
         "http://localhost:8081/base",
         configuration.collectionApiBaseUri("http://localhost:8081/base").toString());
+    assertEquals(
+        "https://localhost/base",
+        configuration.collectionApiBaseUri("https://localhost/base").toString());
+    assertEquals(
+        "http://localhost:1/base",
+        configuration.collectionApiBaseUri("http://localhost:1/base").toString());
+    assertEquals(
+        "https://localhost:65535/base",
+        configuration.collectionApiBaseUri("https://localhost:65535/base").toString());
     assertThrows(
         IllegalStateException.class, () -> configuration.collectionApiBaseUri("not-a-url"));
     assertThrows(
@@ -33,6 +42,24 @@ class OutboxWorkerConfigurationTest {
     assertThrows(
         IllegalStateException.class,
         () -> configuration.collectionApiBaseUri("https://user:password@example.com"));
+    assertThrows(
+        IllegalStateException.class,
+        () -> configuration.collectionApiBaseUri("http://localhost:0"));
+    assertThrows(
+        IllegalStateException.class,
+        () -> configuration.collectionApiBaseUri("http://localhost:65536"));
+    assertThrows(
+        IllegalStateException.class,
+        () -> configuration.collectionApiBaseUri("http://localhost:99999"));
+  }
+
+  @Test
+  @DisplayName("QT-CONFIG-004 폴링 간격은 1ms 이상 1000ms 이하만 허용한다")
+  void validatesPollIntervalForFirstAttemptContract() {
+    assertEquals(1, configuration.outboxWorkerSettings(1, 1).pollIntervalMillis());
+    assertEquals(1000, configuration.outboxWorkerSettings(50, 1000).pollIntervalMillis());
+    assertThrows(IllegalStateException.class, () -> configuration.outboxWorkerSettings(50, 0));
+    assertThrows(IllegalStateException.class, () -> configuration.outboxWorkerSettings(50, 1001));
   }
 
   @Test
@@ -44,6 +71,10 @@ class OutboxWorkerConfigurationTest {
     runner.run(context -> assertNotNull(context.getStartupFailure()));
     runner
         .withPropertyValues("COLLECTION_API_BASE_URL=ftp://localhost")
+        .run(context -> assertNotNull(context.getStartupFailure()));
+    runner
+        .withPropertyValues(
+            "COLLECTION_API_BASE_URL=http://localhost:8081", "outbox.worker.poll-interval-ms=1001")
         .run(context -> assertNotNull(context.getStartupFailure()));
     runner
         .withPropertyValues("outbox.worker.enabled=false")

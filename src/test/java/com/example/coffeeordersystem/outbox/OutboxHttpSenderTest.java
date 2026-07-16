@@ -58,7 +58,7 @@ class OutboxHttpSenderTest {
     AtomicReference<String> authorization = new AtomicReference<>();
     AtomicReference<String> contentType = new AtomicReference<>();
     server.createContext(
-        "/events/orders",
+        "/base/events/orders",
         exchange -> {
           method.set(exchange.getRequestMethod());
           body.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
@@ -79,11 +79,29 @@ class OutboxHttpSenderTest {
   }
 
   @Test
+  @DisplayName("EXT-OUTBOX-001 base URL의 trailing slash와 경로를 보존한다")
+  void preservesBasePathWithTrailingSlash() throws Exception {
+    AtomicInteger requests = new AtomicInteger();
+    server.createContext(
+        "/base/events/orders",
+        exchange -> {
+          requests.incrementAndGet();
+          respond(exchange, 204);
+        });
+    URI baseWithTrailingSlash = URI.create(baseUri + "/");
+
+    OutboxDeliveryResult result = sender(baseWithTrailingSlash).send("{}").get(2, TimeUnit.SECONDS);
+
+    assertTrue(result.published());
+    assertEquals(1, requests.get());
+  }
+
+  @Test
   @DisplayName("EXT-OUTBOX-004 3xx를 따라가지 않고 영구 실패로 분류한다")
   void doesNotFollowRedirect() throws Exception {
     AtomicInteger redirectedRequests = new AtomicInteger();
     server.createContext(
-        "/events/orders",
+        "/base/events/orders",
         exchange -> {
           exchange.getResponseHeaders().add("Location", "/redirected");
           respond(exchange, 302);
@@ -108,7 +126,7 @@ class OutboxHttpSenderTest {
   @DisplayName("EXT-OUTBOX-003 EXT-OUTBOX-004 HTTP 실패를 정책대로 분류한다")
   void classifiesMockApiResponses() throws Exception {
     AtomicInteger status = new AtomicInteger(408);
-    server.createContext("/events/orders", exchange -> respond(exchange, status.get()));
+    server.createContext("/base/events/orders", exchange -> respond(exchange, status.get()));
     OutboxHttpSender sender = sender();
 
     assertTrue(sender.send("{}").get(2, TimeUnit.SECONDS).retryable());
@@ -124,7 +142,7 @@ class OutboxHttpSenderTest {
   @DisplayName("UT-OUTBOX-003 EXT-OUTBOX-003 요청 전체 timeout은 5초다")
   void timesOutWholeRequest() throws Exception {
     server.createContext(
-        "/events/orders",
+        "/base/events/orders",
         exchange -> {
           try {
             Thread.sleep(Duration.ofSeconds(6).toMillis());
@@ -157,12 +175,16 @@ class OutboxHttpSenderTest {
   }
 
   private OutboxHttpSender sender() {
+    return sender(baseUri);
+  }
+
+  private OutboxHttpSender sender(URI targetBaseUri) {
     HttpClient client =
         HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(2))
             .followRedirects(HttpClient.Redirect.NEVER)
             .build();
-    return new OutboxHttpSender(client, baseUri);
+    return new OutboxHttpSender(client, targetBaseUri);
   }
 
   private void respond(HttpExchange exchange, int status) throws IOException {

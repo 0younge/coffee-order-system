@@ -251,7 +251,7 @@ sequenceDiagram
 
 lease 만료 후 다른 워커가 새 토큰으로 재점유하면 이전 워커의 늦은 결과 갱신은 0건으로 끝난다. 이 fencing은 오래된 워커가 최신 상태를 덮어쓰는 것을 막지만, 이미 시작된 외부 HTTP 요청 자체를 취소하지는 못한다. 따라서 전달 보장은 정확히 한 번이 아니라 at-least-once다.
 
-`claim_token`은 UUID 문자열이다. 워커는 활성 배치가 없을 때 `next_retry_at`, `created_at`, `event_id` 오름차순으로 최대 50건을 선점하고 JDK `HttpClient.sendAsync`로 병렬 전송한다. 인스턴스마다 활성 배치는 하나만 허용하며 로컬 활성 배치 표시는 실행 과부하만 제어한다. 이벤트 소유권과 정합성은 계속 DB lease와 fencing이 담당한다. 폴링 주기는 `OUTBOX_POLL_INTERVAL_MS`로 기본 1초, 배치 크기는 `OUTBOX_BATCH_SIZE`로 기본 50건이며 환경 설정으로 바꿀 수 있다.
+`claim_token`은 UUID 문자열이다. 워커는 활성 배치가 없을 때 `next_retry_at`, `created_at`, `event_id` 오름차순으로 최대 50건을 선점하고 JDK `HttpClient.sendAsync`로 병렬 전송한다. 인스턴스마다 활성 배치는 하나만 허용하며 로컬 활성 배치 표시는 실행 과부하만 제어한다. 이벤트 소유권과 정합성은 계속 DB lease와 fencing이 담당한다. 폴링 주기는 `OUTBOX_POLL_INTERVAL_MS`로 기본 1초이며 승인된 2초 최초 요청 계약을 지키도록 `1~1000ms`만 허용한다. 배치 크기는 `OUTBOX_BATCH_SIZE`로 기본 50건이며 1 이상으로 설정한다.
 
 주문 커밋과 동시에 이벤트를 전송 가능 상태로 두고, 워커 정상·전송 가능한 기존 backlog 없음 조건에서 2초 이내에 최초 외부 HTTP 요청을 시작한다. 이 기준은 외부 응답 완료나 `PUBLISHED` 전환 시간이 아니며 주문 API는 외부 응답을 기다리지 않는다.
 
@@ -282,7 +282,7 @@ lease 만료 후 다른 워커가 새 토큰으로 재점유하면 이전 워커
 
 JDK HTTP 클라이언트의 연결 timeout은 2초, 요청 전체 timeout은 5초, 이벤트 lease는 30초다. redirect는 비활성화한다.
 
-외부 API의 base URL은 기본값 없는 `COLLECTION_API_BASE_URL` 환경 변수로 주입한다. 누락되거나 잘못되면 애플리케이션 시작이 실패한다. 현재 범위에서는 별도 자격 증명 헤더를 사용하지 않고 `POST /events/orders`의 응답 본문도 성공 판정이나 저장에 사용하지 않는다.
+외부 API의 base URL은 기본값 없는 `COLLECTION_API_BASE_URL` 환경 변수로 주입한다. HTTP(S) URL의 명시 포트는 `1~65535`만 허용하고 기존 base path를 보존해 그 뒤에 `events/orders`를 결합한다. 누락되거나 잘못되면 애플리케이션 시작이 실패한다. 현재 범위에서는 별도 자격 증명 헤더를 사용하지 않고 외부 요청의 응답 본문도 성공 판정이나 저장에 사용하지 않는다.
 
 ### 12.4 상태 보존
 

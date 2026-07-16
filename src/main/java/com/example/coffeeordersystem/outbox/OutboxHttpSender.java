@@ -26,7 +26,8 @@ class OutboxHttpSender {
       @Qualifier("outboxHttpClient") HttpClient httpClient,
       @Qualifier("collectionApiBaseUri") URI baseUri) {
     this.httpClient = httpClient;
-    this.endpoint = baseUri.resolve("/events/orders");
+    String baseUrl = baseUri.toString();
+    this.endpoint = URI.create(baseUrl + (baseUrl.endsWith("/") ? "" : "/") + "events/orders");
   }
 
   CompletableFuture<OutboxDeliveryResult> send(String payload) {
