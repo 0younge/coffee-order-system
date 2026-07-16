@@ -25,7 +25,8 @@ class LayeredArchitectureTest {
   private static final Path MAIN_SOURCE = Path.of("src/main/java/com/example/coffeeordersystem");
   private static final Set<String> FEATURES =
       Set.of("idempotency", "menu", "order", "outbox", "point");
-  private static final Set<String> INTERNAL_LAYERS = Set.of("api", "domain", "infrastructure");
+  private static final Set<String> FEATURE_LAYERS =
+      Set.of("api", "application", "domain", "infrastructure");
   private static final Set<String> EXPLICIT_CONSTRUCTOR_COMPONENTS =
       Set.of(
           "common/observability/DatabaseContentionMetrics.java",
@@ -49,14 +50,17 @@ class LayeredArchitectureTest {
               + "(?:lombok\\.)?AccessLevel\\.PROTECTED\\s*\\)");
 
   @Test
-  @DisplayName("QT-ARCH-001 현재 기능 경계와 점진적 계층 의존 방향을 지킨다")
+  @DisplayName("QT-ARCH-001 기능 경계와 완성된 계층 의존 방향을 지킨다")
   void keepsCurrentFeatureAndLayerDependenciesAcyclic() throws IOException {
     List<SourceFile> sources = javaSources();
     Map<String, Set<String>> dependencies = featureDependencies(sources);
     Set<String> persistenceTypes = persistenceTypeNames(sources);
 
     for (SourceFile source : sources) {
+      verifyProjectSourceLocation(source);
       verifyControllerDoesNotUsePersistence(source, persistenceTypes);
+      verifyControllerUsesOwnFacadeOnly(source);
+      verifyApiIndependence(source);
       verifyApplicationIndependence(source);
       verifyDomainIndependence(source);
       verifyCrossFeatureBoundary(source);
@@ -322,6 +326,35 @@ class LayeredArchitectureTest {
     SourceFile commonRootFile =
         syntheticSource("common/SharedHelper.java", "class SharedHelper {}");
     assertThrows(AssertionError.class, () -> verifyCommonLocation(commonRootFile));
+    SourceFile flatFeatureSource =
+        syntheticSource("order/LegacyOrderService.java", "class LegacyOrderService {}");
+    assertThrows(AssertionError.class, () -> verifyProjectSourceLocation(flatFeatureSource));
+    SourceFile globalTechnicalSource =
+        syntheticSource("service/GlobalService.java", "class GlobalService {}");
+    assertThrows(AssertionError.class, () -> verifyProjectSourceLocation(globalTechnicalSource));
+    SourceFile apiDomainLeak =
+        syntheticSource(
+            "menu/api/SyntheticResponse.java",
+            "import com.example.coffeeordersystem.menu.domain.Menu;");
+    assertThrows(AssertionError.class, () -> verifyApiIndependence(apiDomainLeak));
+    SourceFile apiCrossFeatureApplicationLeak =
+        syntheticSource(
+            "menu/api/CrossFeatureController.java",
+            "import com.example.coffeeordersystem.point.application.PointFacade;");
+    assertThrows(AssertionError.class, () -> verifyApiIndependence(apiCrossFeatureApplicationLeak));
+    SourceFile controllerWithServiceDependency =
+        syntheticSource(
+            "menu/api/SyntheticController.java",
+            "@org.springframework.web.bind.annotation.RestController class SyntheticController {"
+                + " private final MenuQueryService menuQueryService = null; }");
+    assertThrows(
+        AssertionError.class,
+        () -> verifyControllerUsesOwnFacadeOnly(controllerWithServiceDependency));
+    SourceFile crossFeatureFlatLeak =
+        syntheticSource(
+            "order/application/LegacyPointCaller.java",
+            "import com.example.coffeeordersystem.point.LegacyPointService;");
+    assertThrows(AssertionError.class, () -> verifyCrossFeatureBoundary(crossFeatureFlatLeak));
     SourceFile menuControllerWithExtraDependency =
         syntheticSource(
             "menu/api/MenuController.java",
@@ -480,6 +513,36 @@ class LayeredArchitectureTest {
     }
   }
 
+  private void verifyControllerUsesOwnFacadeOnly(SourceFile source) {
+    if (!hasAnnotation(source.contents(), "RestController")) {
+      return;
+    }
+    String sourceFeature = featureOf(source.path());
+    assertTrue(sourceFeature != null, source.path() + " Controller는 기능 API 경계에 있어야 합니다.");
+    assertTrue(
+        normalized(source.path()).contains("/" + sourceFeature + "/api/"),
+        source.path() + " Controller는 자기 기능의 API 계층에 있어야 합니다.");
+    List<String> dependencies =
+        source.contents().lines().filter(line -> line.contains("private final ")).toList();
+    assertEquals(1, dependencies.size(), source.path() + " Controller는 Facade 하나만 주입해야 합니다.");
+    Matcher dependency =
+        Pattern.compile("private final ([A-Za-z_$][\\w$]*) [A-Za-z_$][\\w$]*;")
+            .matcher(dependencies.get(0));
+    assertTrue(dependency.find(), source.path() + " Controller 의존성 선언을 확인할 수 없습니다.");
+    String facadeType = dependency.group(1);
+    assertTrue(facadeType.endsWith("Facade"), source.path() + " Controller는 Facade만 호출해야 합니다.");
+    assertTrue(
+        source
+            .contents()
+            .contains(
+                "import com.example.coffeeordersystem."
+                    + sourceFeature
+                    + ".application."
+                    + facadeType
+                    + ";"),
+        source.path() + " Controller는 자기 기능의 Application Facade를 사용해야 합니다.");
+  }
+
   private void verifyMenuControllerFacadeOnly(SourceFile source) {
     assertTrue(
         source.contents().contains("MenuQueryFacade"),
@@ -550,6 +613,28 @@ class LayeredArchitectureTest {
     }
   }
 
+  private void verifyApiIndependence(SourceFile source) {
+    if (!normalized(source.path()).contains("/api/")) {
+      return;
+    }
+    String sourceFeature = featureOf(source.path());
+    if (sourceFeature == null) {
+      return;
+    }
+    for (String forbidden : List.of(".domain.", ".infrastructure.")) {
+      assertFalse(
+          source.contents().contains(forbidden),
+          source.path() + " API는 자기 기능의 Application 경계만 사용해야 합니다: " + forbidden);
+    }
+    Matcher references = FEATURE_REFERENCE.matcher(source.contents());
+    while (references.find()) {
+      String targetFeature = references.group(1);
+      if (FEATURES.contains(targetFeature) && !sourceFeature.equals(targetFeature)) {
+        fail(source.path() + " API는 다른 기능을 직접 참조할 수 없습니다: " + references.group());
+      }
+    }
+  }
+
   private void verifyApplicationIndependence(SourceFile source) {
     if (!normalized(source.path()).contains("/application/")) {
       return;
@@ -580,8 +665,8 @@ class LayeredArchitectureTest {
       String targetLayer = references.group(2);
       if (!sourceFeature.equals(targetFeature)
           && FEATURES.contains(targetFeature)
-          && INTERNAL_LAYERS.contains(targetLayer)) {
-        fail(source.path() + " 다른 기능의 " + targetLayer + "를 직접 참조할 수 없습니다: " + references.group());
+          && !"application".equals(targetLayer)) {
+        fail(source.path() + " 다른 기능은 Application 공개 계약으로만 참조해야 합니다: " + references.group());
       }
     }
   }
@@ -606,6 +691,41 @@ class LayeredArchitectureTest {
     assertTrue(
         sourcePath.matches("common/(api|error|observability)/[^/]+\\.java"),
         source.path() + " Common Java 소스는 승인된 API·오류·관측성 경계에 있어야 합니다.");
+  }
+
+  private void verifyProjectSourceLocation(SourceFile source) {
+    Path relative = MAIN_SOURCE.relativize(source.path());
+    if (relative.getNameCount() == 1) {
+      assertEquals(
+          "CoffeeOrderSystemApplication.java",
+          relative.toString(),
+          source.path() + " 최상위에는 애플리케이션 시작점만 둘 수 있습니다.");
+      return;
+    }
+    String topLevel = relative.getName(0).toString();
+    if (FEATURES.contains(topLevel)) {
+      assertTrue(
+          relative.getNameCount() >= 3 && FEATURE_LAYERS.contains(relative.getName(1).toString()),
+          source.path() + " 기능 소스는 API·Application·Domain·Infrastructure 경계에 있어야 합니다.");
+      if (relative.getName(1).toString().equals("api")) {
+        assertTrue(
+            Set.of("menu", "point", "order").contains(topLevel),
+            source.path() + " HTTP API는 승인된 Menu·Point·Order 기능만 소유할 수 있습니다.");
+      }
+      return;
+    }
+    if (topLevel.equals("common")) {
+      verifyCommonLocation(source);
+      return;
+    }
+    if (topLevel.equals("config")) {
+      assertEquals(
+          "config/TimeConfiguration.java",
+          relativeSourcePath(source.path()),
+          source.path() + " 최상위 config 예외는 공용 UTC Clock 설정만 허용합니다.");
+      return;
+    }
+    fail(source.path() + " 전역 기술 계층이나 승인되지 않은 최상위 패키지를 둘 수 없습니다.");
   }
 
   private Map<String, Set<String>> featureDependencies(List<SourceFile> sources) {
