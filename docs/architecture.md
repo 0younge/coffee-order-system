@@ -157,6 +157,8 @@ com.example.coffeeordersystem
 
 기본 의존 방향은 `api → application → domain`이다. 같은 기능의 Application은 해당 기능의 Infrastructure 저장소를 사용할 수 있고 Infrastructure는 Domain을 사용할 수 있다. 다른 기능과 협력할 때는 대상 기능의 공개 Application 계약만 참조하며 기능 간 순환을 만들지 않는다. Java 접근 제한 때문에 public이 필요한 타입도 이 규칙의 예외가 아니며 JUnit·JDK 파일 API 구조 테스트로 직접 import를 금지한다.
 
+구조 테스트는 최상위 전역 controller·service·repository·entity·dto 패키지와 기능별 flat Java 소스를 금지한다. HTTP API는 Menu·Point·Order만 소유하며 각 Controller는 자기 기능의 Application Facade 하나만 주입한다. API는 같은 기능의 Domain·Infrastructure나 다른 기능을 직접 참조하지 않고, 기능 간 참조는 호출 위치와 관계없이 대상 기능의 `application`만 허용한다. 이 위치·의존 규칙과 기능 순환 부재는 현재 전체 Java 소스와 정적 import·완전 수식 참조 합성 사례에 적용한다.
+
 Controller는 Application Facade만 호출한다. 현재 주문·충전 오케스트레이터는 별도 위임 계층을 추가하지 않고 각각 `OrderFacade`, `PointFacade`로 승격한다. 메뉴 조회는 `MenuQueryFacade`, 주문용 포인트 결제는 책임이 분명한 Point Application 계약, 멱등 처리는 `IdempotencyFacade`, 주문 이벤트 기록은 `OutboxEventAppender`, Outbox 전달 조정은 `OutboxDeliveryFacade`를 경계로 삼는다. 최종 이름은 같은 책임을 더 명확히 표현할 수 있지만 한 메서드를 그대로 Service에 전달하는 Facade는 만들지 않는다.
 
 API Request·Response는 API 계층에, Command·유스케이스 Result는 Application 계층에 둔다. Controller가 두 타입 사이를 변환한다. 최초 HTTP status와 JSON body를 그대로 저장·재사용해야 하는 멱등 응답 직렬화는 기능별 전용 codec 또는 assembler에 격리하며 일반 Application·Domain 로직에 Spring MVC·Jackson 타입을 퍼뜨리지 않는다.
