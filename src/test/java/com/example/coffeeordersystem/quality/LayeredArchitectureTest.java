@@ -244,6 +244,48 @@ class LayeredArchitectureTest {
   }
 
   @Test
+  @DisplayName("QT-ARCH-001 Common은 승인된 공통 경계만 소유하고 기능에 의존하지 않는다")
+  void keepsCommonBoundarySmallAndFeatureIndependent() throws IOException {
+    Path commonSource = MAIN_SOURCE.resolve("common");
+    Set<String> commonPackages;
+    try (var paths = Files.list(commonSource)) {
+      commonPackages =
+          paths
+              .filter(Files::isDirectory)
+              .map(path -> path.getFileName().toString())
+              .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+    assertEquals(
+        Set.of("api", "error", "observability"),
+        commonPackages,
+        "Common은 실제로 재사용되는 API·오류·관측성 경계만 가져야 합니다.");
+
+    for (SourceFile source : javaSources()) {
+      verifyCommonIndependence(source);
+      if (normalized(source.path()).contains("/common/")) {
+        assertFalse(
+            source.path().getFileName().toString().startsWith("Base"),
+            source.path() + " Common에 범용 Base 추상화를 둘 수 없습니다.");
+      }
+    }
+
+    String errorCode = Files.readString(commonSource.resolve("error/ErrorCode.java"));
+    assertTrue(
+        errorCode.contains("org.springframework.http.HttpStatus"),
+        "공통 ErrorCode의 기존 HTTP 상태 결합은 중복 매핑 없이 유지해야 합니다.");
+    String globalExceptionHandler =
+        Files.readString(commonSource.resolve("error/GlobalExceptionHandler.java"));
+    assertTrue(
+        hasAnnotation(globalExceptionHandler, "RestControllerAdvice"),
+        "공통 오류는 하나의 HTTP 예외 변환 경계를 제공해야 합니다.");
+    String requestLoggingFilter =
+        Files.readString(commonSource.resolve("observability/RequestLoggingFilter.java"));
+    assertFalse(
+        requestLoggingFilter.contains("public class RequestLoggingFilter"),
+        "HTTP 요청 로깅 구현은 Common 밖에 공개할 필요가 없습니다.");
+  }
+
+  @Test
   @DisplayName("QT-ARCH-001 정적 import와 저장소 역할 타입 우회를 탐지한다")
   void detectsStaticImportsAndPersistenceRoleTypes() {
     SourceFile staticImport =
@@ -275,6 +317,11 @@ class LayeredArchitectureTest {
             "class DirectJdbc { org.springframework.jdbc.core.JdbcTemplate jdbc; }");
     assertThrows(
         AssertionError.class, () -> verifyApplicationIndependence(qualifiedApplicationJdbcLeak));
+    SourceFile commonFeatureLeak =
+        syntheticSource(
+            "common/api/SyntheticResponse.java",
+            "import com.example.coffeeordersystem.order.application.OrderResult;");
+    assertThrows(AssertionError.class, () -> verifyCommonIndependence(commonFeatureLeak));
     SourceFile menuControllerWithExtraDependency =
         syntheticSource(
             "menu/api/MenuController.java",
@@ -535,6 +582,18 @@ class LayeredArchitectureTest {
           && FEATURES.contains(targetFeature)
           && INTERNAL_LAYERS.contains(targetLayer)) {
         fail(source.path() + " 다른 기능의 " + targetLayer + "를 직접 참조할 수 없습니다: " + references.group());
+      }
+    }
+  }
+
+  private void verifyCommonIndependence(SourceFile source) {
+    if (!normalized(source.path()).contains("/common/")) {
+      return;
+    }
+    Matcher references = FEATURE_REFERENCE.matcher(source.contents());
+    while (references.find()) {
+      if (FEATURES.contains(references.group(1))) {
+        fail(source.path() + " Common은 기능 코드에 의존할 수 없습니다: " + references.group());
       }
     }
   }
