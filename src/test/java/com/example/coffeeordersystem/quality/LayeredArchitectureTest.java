@@ -2,6 +2,7 @@ package com.example.coffeeordersystem.quality;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -27,37 +28,62 @@ class LayeredArchitectureTest {
   private static final Set<String> INTERNAL_LAYERS = Set.of("api", "domain", "infrastructure");
   private static final Set<String> EXPLICIT_CONSTRUCTOR_COMPONENTS =
       Set.of(
-          "DatabaseContentionMetrics.java",
-          "OutboxHttpSender.java",
-          "OutboxMetrics.java",
-          "OutboxWorker.java");
+          "common/observability/DatabaseContentionMetrics.java",
+          "outbox/OutboxHttpSender.java",
+          "outbox/OutboxMetrics.java",
+          "outbox/OutboxWorker.java");
   private static final Pattern FEATURE_IMPORT =
       Pattern.compile(
-          "(?m)^import com\\.example\\.coffeeordersystem\\.([a-z]+)(?:\\.([A-Za-z0-9_]+))?.*;$");
-  private static final Pattern SPRING_COMPONENT =
+          "(?m)^import(?: static)? com\\.example\\.coffeeordersystem\\.([a-z]+)(?:\\.([A-Za-z0-9_]+))?.*;$");
+  private static final Pattern FIELD_INJECTION =
       Pattern.compile(
-          "(?m)^\\s*@(RestController|RestControllerAdvice|Component|Service|Repository|Configuration)\\b");
+          "(?s)@(?:[A-Za-z_$][\\w$]*\\.)*(?:Autowired|Value|Resource|Inject)\\b"
+              + "(?:\\s*\\([^;{}]*\\))?\\s*"
+              + "(?:(?:public|protected|private|static|final|transient|volatile)\\s+)*"
+              + "[\\w.$<>?, \\[\\]]+\\s+\\w+\\s*(?:=[^;{}]*)?;");
+  private static final Pattern PROTECTED_NO_ARGS_CONSTRUCTOR =
+      Pattern.compile(
+          "@(?:lombok\\.)?NoArgsConstructor\\s*\\(\\s*access\\s*=\\s*"
+              + "(?:lombok\\.)?AccessLevel\\.PROTECTED\\s*\\)");
 
   @Test
   @DisplayName("QT-ARCH-001 현재 기능 경계와 점진적 계층 의존 방향을 지킨다")
   void keepsCurrentFeatureAndLayerDependenciesAcyclic() throws IOException {
     List<SourceFile> sources = javaSources();
     Map<String, Set<String>> dependencies = featureDependencies(sources);
+    Set<String> persistenceTypes = persistenceTypeNames(sources);
 
     for (SourceFile source : sources) {
-      if (source.contents().contains("@RestController")) {
-        assertFalse(
-            Pattern.compile("(?m)^import .*Repository;$").matcher(source.contents()).find(),
-            source.path() + " Controller는 Repository를 직접 참조할 수 없습니다.");
-        assertFalse(
-            source.contents().contains("JdbcTemplate"),
-            source.path() + " Controller는 JdbcTemplate을 직접 참조할 수 없습니다.");
-      }
+      verifyControllerDoesNotUsePersistence(source, persistenceTypes);
       verifyDomainIndependence(source);
       verifyCrossFeatureBoundary(source);
     }
 
     assertFalse(hasFeatureCycle(dependencies), "기능 간 순환 의존이 없어야 합니다: " + dependencies);
+  }
+
+  @Test
+  @DisplayName("QT-ARCH-001 정적 import와 저장소 역할 타입 우회를 탐지한다")
+  void detectsStaticImportsAndPersistenceRoleTypes() {
+    SourceFile staticImport =
+        syntheticSource(
+            "order/application/SyntheticOrder.java",
+            "import static com.example.coffeeordersystem.point.domain.PointAccount.fixture;");
+    assertThrows(AssertionError.class, () -> verifyCrossFeatureBoundary(staticImport));
+
+    SourceFile store =
+        syntheticSource(
+            "order/infrastructure/OrderStore.java",
+            "@org.springframework.stereotype.Repository class OrderStore {}");
+    SourceFile controller =
+        syntheticSource(
+            "order/api/SyntheticController.java",
+            "@org.springframework.web.bind.annotation.RestController "
+                + "class SyntheticController { private final OrderStore store = null; }");
+    Set<String> persistenceTypes = persistenceTypeNames(List.of(store, controller));
+    assertThrows(
+        AssertionError.class,
+        () -> verifyControllerDoesNotUsePersistence(controller, persistenceTypes));
   }
 
   @Test
@@ -82,34 +108,48 @@ class LayeredArchitectureTest {
     assertFalse(build.contains("testAnnotationProcessor 'org.projectlombok:lombok'"));
 
     for (SourceFile source : javaSources()) {
-      assertFalse(source.contents().contains("@Autowired"), source.path() + " 필드 주입을 금지합니다.");
+      assertFalse(
+          FIELD_INJECTION.matcher(source.contents()).find(), source.path() + " 필드 주입을 금지합니다.");
       assertFalse(
           source.contents().contains("LoggerFactory"),
           source.path() + " 수동 LoggerFactory 보일러플레이트를 금지합니다.");
       for (String forbidden : List.of("@SneakyThrows", "@Synchronized", "@Cleanup")) {
         assertFalse(
-            source.contents().contains(forbidden),
+            hasAnnotation(source.contents(), forbidden.substring(1)),
             source.path() + " 승인되지 않은 Lombok annotation을 금지합니다: " + forbidden);
       }
 
-      if (SPRING_COMPONENT.matcher(source.contents()).find()
+      if (hasAnyAnnotation(
+              source.contents(),
+              "RestController",
+              "RestControllerAdvice",
+              "Component",
+              "Service",
+              "Repository",
+              "Configuration")
           && source.contents().contains("private final ")) {
-        String fileName = source.path().getFileName().toString();
-        if (EXPLICIT_CONSTRUCTOR_COMPONENTS.contains(fileName)) {
+        String sourcePath = relativeSourcePath(source.path());
+        if (EXPLICIT_CONSTRUCTOR_COMPONENTS.contains(sourcePath)) {
+          String fileName = source.path().getFileName().toString();
           String className = fileName.substring(0, fileName.length() - ".java".length());
           assertTrue(
-              source.contents().contains(className + "("),
+              Pattern.compile(
+                      "(?m)^\\s*(?:public|protected|private)?\\s*"
+                          + Pattern.quote(className)
+                          + "\\s*\\(")
+                  .matcher(source.contents())
+                  .find(),
               source.path() + " 예외 컴포넌트는 의미 있는 명시 생성자를 유지해야 합니다.");
         } else {
           assertTrue(
-              source.contents().contains("@RequiredArgsConstructor"),
+              hasAnnotation(source.contents(), "RequiredArgsConstructor"),
               source.path() + " final 의존성은 Lombok 생성자 주입을 사용해야 합니다.");
         }
       }
 
-      if (source.contents().contains("@Entity")) {
+      if (hasAnnotation(source.contents(), "Entity")) {
         assertTrue(
-            source.contents().contains("@NoArgsConstructor(access = AccessLevel.PROTECTED)"),
+            PROTECTED_NO_ARGS_CONSTRUCTOR.matcher(source.contents()).find(),
             source.path() + " JPA 기본 생성자는 protected여야 합니다.");
         for (String forbidden :
             List.of(
@@ -120,12 +160,38 @@ class LayeredArchitectureTest {
                 "@EqualsAndHashCode",
                 "@ToString")) {
           assertFalse(
-              Pattern.compile("(?m)^\\s*" + Pattern.quote(forbidden) + "\\b")
-                  .matcher(source.contents())
-                  .find(),
+              hasAnnotation(source.contents(), forbidden.substring(1)),
               source.path() + " Entity에는 " + forbidden + "를 사용할 수 없습니다.");
         }
       }
+    }
+  }
+
+  @Test
+  @DisplayName("QT-LOMBOK-001 완전 수식 annotation과 필드 주입만 정확히 탐지한다")
+  void normalizesQualifiedAnnotationsAndDetectsOnlyFieldInjection() {
+    assertTrue(hasAnnotation("@lombok.Data class Sample {}", "Data"));
+    assertTrue(hasAnnotation("@jakarta.persistence.Entity class Sample {}", "Entity"));
+    assertTrue(
+        FIELD_INJECTION
+            .matcher("@jakarta.inject.Inject private SampleRepository repository;")
+            .find());
+    assertFalse(
+        FIELD_INJECTION.matcher("@Autowired Sample(@Value(\"${sample}\") String value) {}").find());
+  }
+
+  private void verifyControllerDoesNotUsePersistence(
+      SourceFile source, Set<String> persistenceTypes) {
+    if (!hasAnnotation(source.contents(), "RestController")) {
+      return;
+    }
+    assertFalse(
+        source.contents().contains("JdbcTemplate"),
+        source.path() + " Controller는 JdbcTemplate을 직접 참조할 수 없습니다.");
+    for (String type : persistenceTypes) {
+      assertFalse(
+          Pattern.compile("\\b" + Pattern.quote(type) + "\\b").matcher(source.contents()).find(),
+          source.path() + " Controller는 저장소 역할 타입 " + type + "을 직접 참조할 수 없습니다.");
     }
   }
 
@@ -184,6 +250,19 @@ class LayeredArchitectureTest {
     return dependencies;
   }
 
+  private Set<String> persistenceTypeNames(List<SourceFile> sources) {
+    Set<String> names = new HashSet<>();
+    for (SourceFile source : sources) {
+      if (hasAnnotation(source.contents(), "Repository")
+          || source.contents().contains("extends JpaRepository")
+          || source.contents().contains("extends CrudRepository")
+          || source.contents().contains("JdbcTemplate")) {
+        names.add(source.path().getFileName().toString().replaceFirst("\\.java$", ""));
+      }
+    }
+    return Set.copyOf(names);
+  }
+
   private boolean hasFeatureCycle(Map<String, Set<String>> dependencies) {
     Set<String> visited = new HashSet<>();
     Set<String> visiting = new HashSet<>();
@@ -237,6 +316,30 @@ class LayeredArchitectureTest {
 
   private String normalized(Path path) {
     return "/" + path.toString().replace('\\', '/') + "/";
+  }
+
+  private String relativeSourcePath(Path path) {
+    return MAIN_SOURCE.relativize(path).toString().replace('\\', '/');
+  }
+
+  private boolean hasAnyAnnotation(String source, String... simpleNames) {
+    for (String simpleName : simpleNames) {
+      if (hasAnnotation(source, simpleName)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private boolean hasAnnotation(String source, String simpleName) {
+    return Pattern.compile(
+            "(?m)^\\s*@(?:[A-Za-z_$][\\w$]*\\.)*" + Pattern.quote(simpleName) + "\\b")
+        .matcher(source)
+        .find();
+  }
+
+  private SourceFile syntheticSource(String relativePath, String contents) {
+    return new SourceFile(MAIN_SOURCE.resolve(relativePath), contents);
   }
 
   private record SourceFile(Path path, String contents) {}
