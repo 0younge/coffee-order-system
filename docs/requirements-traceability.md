@@ -76,7 +76,7 @@
 1. 구현: [LayeredArchitectureTest.java](../src/test/java/com/example/coffeeordersystem/quality/LayeredArchitectureTest.java)가 승인된 최상위·기능 계층 위치, Controller의 자기 Facade 단일 주입, API·Application·Domain 독립성, cross-feature Application-only 참조, 기능 순환 부재, 중복 Service 부재와 제한된 Lombok 정책을 전체 소스에 검사
 2. 우회 검증: 정적 import, 완전 수식 참조, 기능별 flat 소스, 전역 기술 패키지, API→Domain·다른 기능 Application, cross-feature flat 참조, Controller→Service 합성 사례가 구조 규칙에서 실패함을 검증
 3. 실행: 2026-07-17 품질·구조 관련 테스트 13개 성공, 실패·오류·제외 0개. MySQL 8.4 healthy에서 `./gradlew clean check build` 성공; 전체 115개, 성공 115개, 실패·오류·제외 0개. `./gradlew bootRun` 시작과 `GET /actuator/health`의 `UP`을 확인했다. API 명세·ERD·Flyway V1~V3 해시는 리팩토링 기준선과 같다.
-4. 재현 커밋: `816a0ac`(전체 소스 구조·우회 검증 완성), `278b217`(구조 문서·추적성 동기화), `4c4540b`(모든 Controller 형태와 인스턴스 의존성 우회 차단); GitHub 작업 이슈 `#33`
+4. 재현 커밋: `816a0ac`(전체 소스 구조·우회 검증 완성), `278b217`(구조 문서·추적성 동기화), `4c4540b`(모든 Controller 형태와 인스턴스 의존성 우회 차단), `2b2c21a`(package-private·annotation·완전 수식 필드 탐지); GitHub 작업 이슈 `#33`
 
 ### 기반선 검증 증거 (GitHub #1)
 
