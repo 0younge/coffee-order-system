@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DB_PORT: 3306
+      DB_USERNAME: coffee
+      DB_PASSWORD: coffee-test-password
+      TEST_DB_NAME: coffee_order_system_test
+      TEST_DB_URL: "jdbc:mysql://localhost:3306/coffee_order_system_test?connectionTimeZone=UTC&sessionVariables=time_zone='%2B00:00'"
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: coffee_order_system_test
+          MYSQL_USER: coffee
+          MYSQL_PASSWORD: coffee-test-password
+          MYSQL_ROOT_PASSWORD: root-test-password
+          TZ: UTC
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot-test-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+      - name: Java 17 설정
+        uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: "17"
+          cache: gradle
+      - name: fresh MySQL 전체 검증
+        run: ./gradlew clean check build

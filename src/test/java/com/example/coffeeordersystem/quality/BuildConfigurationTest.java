@@ -84,6 +84,30 @@ class BuildConfigurationTest {
   }
 
   @Test
+  @DisplayName("QT-CONFIG-005 GitHub Actions가 fresh MySQL에서 전체 게이트를 실행한다")
+  void configuresFreshMysqlContinuousIntegration() throws IOException {
+    String workflow = Files.readString(Path.of(".github/workflows/ci.yml"));
+
+    assertTrue(workflow.contains("on:\n  push:"));
+    assertTrue(workflow.contains("branches:\n      - main"));
+    assertTrue(workflow.contains("  pull_request:"));
+    assertTrue(workflow.contains("permissions:\n  contents: read"));
+    assertTrue(workflow.contains("services:\n      mysql:"));
+    assertTrue(workflow.contains("image: mysql:8.4"));
+    assertTrue(workflow.contains("MYSQL_DATABASE: coffee_order_system_test"));
+    assertTrue(workflow.contains("MYSQL_USER: coffee"));
+    assertTrue(workflow.contains("MYSQL_PASSWORD: coffee-test-password"));
+    assertTrue(workflow.contains("DB_PORT: 3306"));
+    assertTrue(workflow.contains("- 3306:3306"));
+    assertTrue(workflow.contains("TEST_DB_URL: \"jdbc:mysql://localhost:3306/"));
+    assertTrue(workflow.contains("sessionVariables=time_zone='%2B00:00'"));
+    assertTrue(workflow.contains("./gradlew clean check build"));
+    assertFalse(workflow.contains("secrets."));
+    assertFalse(workflow.contains("if: false"));
+    assertFalse(workflow.contains("continue-on-error"));
+  }
+
+  @Test
   @DisplayName("QT-SCHEMA-001 Flyway migration이 ERD의 테이블과 필드를 포함한다")
   void migrationContainsDocumentedSchema() throws IOException {
     String erd = Files.readString(Path.of("docs/erd.md"));

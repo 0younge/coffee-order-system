@@ -53,9 +53,11 @@ class DatabaseMigrationTest {
         List.of("아메리카노", "카페라떼", "카푸치노"),
         jdbcTemplate.queryForList("SELECT name FROM menus ORDER BY id", String.class));
     assertEquals(
-        1L,
-        count(
-            "SELECT COUNT(*) FROM flyway_schema_history " + "WHERE version = '1' AND success = 1"));
+        List.of("1", "2", "3"),
+        jdbcTemplate.queryForList(
+            "SELECT version FROM flyway_schema_history "
+                + "WHERE success = 1 AND version IS NOT NULL ORDER BY installed_rank",
+            String.class));
   }
 
   @Test

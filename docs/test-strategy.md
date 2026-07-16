@@ -52,11 +52,14 @@ ID 형식은 `<계층>-<영역>-<3자리 순번>`으로 고정한다. 예를 들
 | Java | Amazon Corretto 17 호환 JDK | Gradle toolchain에 Java 17 지정 |
 | 애플리케이션 | Spring Boot 4.1.0, Gradle 9.5.1 | 빌드 기준선 존재 |
 | 데이터베이스 | Docker Compose의 MySQL 8.4 LTS, 개발·테스트 DB 분리 | 초기화 스크립트·테스트 프로필·Flyway migration 검증 완료 |
+| CI 데이터베이스 | 작업마다 새 MySQL 8.4 서비스와 테스트 전용 DB·계정 | 첫 Spring context가 V1부터 전체 migration 적용 후 전체 게이트 실행 |
 | 애플리케이션 실행 | 호스트에서 `./gradlew bootRun` | MySQL 연결과 애플리케이션 시작 확인 |
 | 외부 수집 API | 테스트 프로세스가 제어하는 JDK Mock HTTP 서버 | 요청·timeout·상태 분류·재시도 검증 완료 |
 | 저장 기준 시간 | UTC | 주입 가능 `Clock`, 애플리케이션·JDBC·DB 설정과 비 UTC JVM 저장 검증 완료 |
 
-Docker Compose는 MySQL만 실행한다. 애플리케이션과 Gradle 테스트는 호스트에서 실행해 디버깅과 반복 시간을 단순하게 유지한다. 개발과 테스트는 하나의 Compose MySQL 인스턴스를 사용하되 개발용 `coffee_order_system`과 테스트용 `coffee_order_system_test`를 분리한다. 자동 구현은 멱등적인 `docker/mysql/init/01-create-test-database.sh`를 `/docker-entrypoint-initdb.d/01-create-test-database.sh`에 연결해 신규 볼륨에서 두 데이터베이스와 애플리케이션 사용자의 권한을 준비한다. 기존 볼륨에 테스트 데이터베이스가 없으면 `docker compose exec mysql bash /docker-entrypoint-initdb.d/01-create-test-database.sh`를 한 번 실행한다. 이 절차는 데이터베이스와 권한만 멱등적으로 준비하고 개발 데이터나 볼륨을 삭제하지 않는다. 테스트 프로필은 개발 URL을 상속하지 않고 테스트 JDBC URL을 명시한다. 각 테스트는 실행별 고유 식별자로 만든 자기 데이터만 FK 순서에 맞춰 정리하며 전체 `TRUNCATE`, schema 삭제와 `Flyway clean`을 사용하지 않는다. 빈 DB 마이그레이션은 CI나 새 Compose 볼륨에서 검증한다.
+Docker Compose는 MySQL만 실행한다. 애플리케이션과 Gradle 테스트는 호스트에서 실행해 디버깅과 반복 시간을 단순하게 유지한다. 개발과 테스트는 하나의 Compose MySQL 인스턴스를 사용하되 개발용 `coffee_order_system`과 테스트용 `coffee_order_system_test`를 분리한다. 자동 구현은 멱등적인 `docker/mysql/init/01-create-test-database.sh`를 `/docker-entrypoint-initdb.d/01-create-test-database.sh`에 연결해 신규 볼륨에서 두 데이터베이스와 애플리케이션 사용자의 권한을 준비한다. 기존 볼륨에 테스트 데이터베이스가 없으면 `docker compose exec mysql bash /docker-entrypoint-initdb.d/01-create-test-database.sh`를 한 번 실행한다. 이 절차는 데이터베이스와 권한만 멱등적으로 준비하고 개발 데이터나 볼륨을 삭제하지 않는다. 테스트 프로필은 개발 URL을 상속하지 않고 테스트 JDBC URL을 명시한다. 각 테스트는 실행별 고유 식별자로 만든 자기 데이터만 FK 순서에 맞춰 정리하며 전체 `TRUNCATE`, schema 삭제와 `Flyway clean`을 사용하지 않는다.
+
+로컬 지속 DB 테스트는 반복 실행이 빠르고 업무 회귀·제약·락을 검증하지만 이미 적용된 migration 원문의 손상은 숨길 수 있다. GitHub Actions는 작업마다 새 `coffee_order_system_test`를 가진 MySQL 8.4 서비스를 생성해 첫 Spring context가 V1부터 전체 migration을 적용하게 하고 `./gradlew clean check build`를 실행한다. 워크플로의 DB 자격 증명은 일회성 테스트 서비스에만 쓰는 고정 공개 값이며 저장소·운영 시크릿을 참조하지 않는다.
 
 구현 단계에서 추가가 승인된 애플리케이션 의존성은 `spring-boot-starter-validation`, `spring-boot-starter-actuator`, Spring Boot 4의 Flyway 자동 구성 모듈인 `org.springframework.boot:spring-boot-flyway`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`이다. 빌드 도구로는 Spotless 플러그인과 Java 포매터가 승인됐다. Mock HTTP, bounded polling과 동시성 실행은 JDK 표준 기능으로 구현하며 그 밖의 라이브러리는 추가 전에 다시 승인받는다.
 
@@ -203,6 +206,7 @@ Mock 서버는 테스트마다 수신 기록과 응답 스크립트를 초기화
 | `QT-FORMAT-001` | Spotless 완료 게이트 | `spotlessCheck`가 `check`에 포함되고 포맷 불일치에서 실패하며 검사·빌드는 소스를 자동 수정하지 않음 |
 | `QT-CONFIG-003` | 테스트 DB·워커 프로필 | 멱등 초기화 스크립트로 신규·기존 볼륨의 테스트 DB를 안전하게 준비하고, 일반 테스트는 테스트 DB만 사용하며 Outbox 전용 테스트만 Mock 서버와 함께 워커를 켬 |
 | `QT-CONFIG-004` | Outbox 폴링 간격 | 승인된 최초 요청 계약을 지키도록 `OUTBOX_POLL_INTERVAL_MS`를 `1~1000ms`로 제한하고 범위 밖이면 시작 실패 |
+| `QT-CONFIG-005` | fresh MySQL CI | GitHub Actions가 작업별 MySQL 8.4와 테스트 전용 공개 자격 증명만 사용해 `clean check build`를 실행하고 저장소·운영 시크릿을 참조하지 않음 |
 | `QT-OBS-001` | key-value 로그와 비밀정보 제거 | 요청·사용자·주문·이벤트 상관 ID를 연결하고 DB 자격 증명·전체 멱등키를 기록하지 않으며 외부 JSON 로그 라이브러리를 사용하지 않음 |
 | `QT-OBS-002` | 관측 지표 | `http.server.requests`, HikariCP 기본 지표, DB 경합과 Outbox counter, `PENDING`·`FAILED`·oldest pending gauge가 등록·증가하고 고 cardinality 식별자 tag가 없음 |
 | `QT-TRACE-001` | 문서 링크와 추적성 | README 링크가 유효하고 요구사항·ADR·테스트 ID에 끊긴 참조가 없음 |

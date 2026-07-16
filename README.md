@@ -175,6 +175,7 @@ docker compose up -d --wait
 - Flyway 구현 후 애플리케이션 시작 시 스키마, 초기 메뉴와 과제·로컬용 기준 사용자 `id=1`, `point_balance=0`을 적용합니다.
 - 통합 테스트는 인메모리 DB로 대체하지 않고 실제 MySQL과의 SQL·락·제약 조건 동작을 검증합니다.
 - 개발과 테스트는 같은 Compose MySQL 인스턴스를 사용하되 서로 다른 데이터베이스를 사용합니다. 일반 테스트에서는 Outbox 워커를 비활성화하고 Outbox 전용 테스트에서만 활성화합니다.
+- 로컬 테스트는 지속 볼륨으로 빠른 회귀를 확인하고, [GitHub Actions CI](./.github/workflows/ci.yml)는 매 실행 새 MySQL 8.4 서비스에서 V1부터 전체 Flyway와 `./gradlew clean check build`를 검증합니다. CI의 고정 DB 계정은 해당 일회성 테스트 서비스 전용 공개 값이며 저장소·운영 시크릿을 사용하지 않습니다.
 - 테스트는 고유 데이터만 FK 순서로 정리합니다. 전체 `TRUNCATE`, schema 삭제와 `Flyway clean`은 사용하지 않습니다.
 - 첫 자동 구현 완료 게이트에는 기능·동시성·외부 계약·품질 검사와 정상 조건의 Outbox 최초 요청 2초 검증을 포함합니다. `PT-*` 부하·성능 기준선은 기능 구현 후 별도 작업으로 측정합니다.
 
