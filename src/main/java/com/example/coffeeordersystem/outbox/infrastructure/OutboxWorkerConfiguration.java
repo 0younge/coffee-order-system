@@ -1,4 +1,4 @@
-package com.example.coffeeordersystem.outbox;
+package com.example.coffeeordersystem.outbox.infrastructure;
 
 import java.net.URI;
 import java.net.http.HttpClient;

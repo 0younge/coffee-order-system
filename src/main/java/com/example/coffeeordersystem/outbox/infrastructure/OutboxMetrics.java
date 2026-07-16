@@ -1,4 +1,4 @@
-package com.example.coffeeordersystem.outbox;
+package com.example.coffeeordersystem.outbox.infrastructure;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
@@ -11,7 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
-class OutboxMetrics {
+public class OutboxMetrics {
 
   private final JdbcTemplate jdbcTemplate;
   private final Clock clock;
@@ -36,19 +36,19 @@ class OutboxMetrics {
         .register(meterRegistry);
   }
 
-  void published() {
+  public void published() {
     published.increment();
   }
 
-  void retried() {
+  public void retried() {
     retried.increment();
   }
 
-  void failed() {
+  public void failed() {
     failed.increment();
   }
 
-  void fencingRejected() {
+  public void fencingRejected() {
     fencingRejected.increment();
   }
 

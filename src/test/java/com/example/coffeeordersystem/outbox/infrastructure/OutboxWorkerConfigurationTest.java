@@ -1,4 +1,4 @@
-package com.example.coffeeordersystem.outbox;
+package com.example.coffeeordersystem.outbox.infrastructure;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

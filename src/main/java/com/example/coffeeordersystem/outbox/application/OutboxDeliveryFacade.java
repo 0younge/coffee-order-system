@@ -1,47 +1,37 @@
-package com.example.coffeeordersystem.outbox;
+package com.example.coffeeordersystem.outbox.application;
 
+import com.example.coffeeordersystem.outbox.domain.OutboxClaim;
+import com.example.coffeeordersystem.outbox.domain.OutboxDeliveryResult;
+import com.example.coffeeordersystem.outbox.infrastructure.OutboxHttpSender;
+import com.example.coffeeordersystem.outbox.infrastructure.OutboxMetrics;
+import com.example.coffeeordersystem.outbox.infrastructure.OutboxStore;
 import java.time.Clock;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 @Slf4j
-@Component
+@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
+@Service
 @ConditionalOnProperty(
     prefix = "outbox.worker",
     name = "enabled",
     havingValue = "true",
     matchIfMissing = true)
-class OutboxWorker {
+public class OutboxDeliveryFacade {
 
   private final OutboxStore outboxStore;
   private final OutboxHttpSender httpSender;
   private final Clock clock;
   private final OutboxMetrics metrics;
-  private final int batchSize;
   private final AtomicBoolean active = new AtomicBoolean();
 
-  OutboxWorker(
-      OutboxStore outboxStore,
-      OutboxHttpSender httpSender,
-      Clock clock,
-      OutboxMetrics metrics,
-      OutboxWorkerSettings settings) {
-    this.outboxStore = outboxStore;
-    this.httpSender = httpSender;
-    this.clock = clock;
-    this.metrics = metrics;
-    this.batchSize = settings.batchSize();
-  }
-
-  @Scheduled(
-      fixedDelayString = "#{@outboxWorkerSettings.pollIntervalMillis()}",
-      initialDelayString = "#{@outboxWorkerSettings.pollIntervalMillis()}")
-  void poll() {
+  public void deliverDue(int batchSize) {
     if (!active.compareAndSet(false, true)) {
       return;
     }

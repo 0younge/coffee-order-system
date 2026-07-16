@@ -29,9 +29,8 @@ class LayeredArchitectureTest {
   private static final Set<String> EXPLICIT_CONSTRUCTOR_COMPONENTS =
       Set.of(
           "common/observability/DatabaseContentionMetrics.java",
-          "outbox/OutboxHttpSender.java",
-          "outbox/OutboxMetrics.java",
-          "outbox/OutboxWorker.java");
+          "outbox/infrastructure/OutboxHttpSender.java",
+          "outbox/infrastructure/OutboxMetrics.java");
   private static final Pattern FEATURE_REFERENCE =
       Pattern.compile(
           "(?m)(?:^import(?: static)?\\s+)?com\\.example\\.coffeeordersystem\\.([a-z]+)"
@@ -185,6 +184,63 @@ class LayeredArchitectureTest {
             || orderFacade.contains("outbox.domain.")
             || orderFacade.contains("outbox.infrastructure."),
         "Order는 Outbox API, Domain, Infrastructure를 직접 참조할 수 없습니다.");
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("outbox/application/OutboxDeliveryFacade.java")),
+        "Outbox 전달은 Application Facade가 조정해야 합니다.");
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("outbox/domain/OutboxRetryPolicy.java")),
+        "Outbox 재시도 규칙은 Domain 계층에 있어야 합니다.");
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("outbox/infrastructure/OutboxStore.java")),
+        "Outbox SQL 저장소는 Infrastructure 계층에 있어야 합니다.");
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("outbox/infrastructure/OutboxHttpSender.java")),
+        "Outbox HTTP Client는 Infrastructure 계층에 있어야 합니다.");
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("outbox/infrastructure/OutboxWorker.java")),
+        "Outbox Worker는 Infrastructure scheduler adapter여야 합니다.");
+    assertFalse(
+        Files.exists(MAIN_SOURCE.resolve("outbox/OutboxWorker.java"))
+            || Files.exists(MAIN_SOURCE.resolve("outbox/OutboxStore.java"))
+            || Files.exists(MAIN_SOURCE.resolve("outbox/OutboxHttpSender.java")),
+        "Outbox 전달 구현을 flat package에 남길 수 없습니다.");
+    String outboxWorker =
+        Files.readString(MAIN_SOURCE.resolve("outbox/infrastructure/OutboxWorker.java"));
+    assertTrue(
+        outboxWorker.contains("outboxDeliveryFacade.deliverDue(settings.batchSize())"),
+        "OutboxWorker는 설정된 배치 크기로 Delivery Facade만 호출해야 합니다.");
+    for (String forbidden :
+        List.of(
+            "OutboxStore",
+            "OutboxHttpSender",
+            "OutboxMetrics",
+            "AtomicBoolean",
+            "CompletableFuture",
+            "Clock")) {
+      assertFalse(
+          outboxWorker.contains(forbidden),
+          "OutboxWorker scheduler adapter가 전달 조정을 소유할 수 없습니다: " + forbidden);
+    }
+    String outboxDeliveryFacade =
+        Files.readString(MAIN_SOURCE.resolve("outbox/application/OutboxDeliveryFacade.java"));
+    assertFalse(
+        outboxDeliveryFacade.contains("@Scheduled"),
+        "OutboxDeliveryFacade는 scheduler annotation을 소유할 수 없습니다.");
+    assertTrue(
+        outboxDeliveryFacade.contains("AtomicBoolean")
+            && outboxDeliveryFacade.contains("CompletableFuture.allOf")
+            && outboxDeliveryFacade.contains("outboxStore.claim")
+            && outboxDeliveryFacade.contains("outboxStore.publish")
+            && outboxDeliveryFacade.contains("outboxStore.fail"),
+        "OutboxDeliveryFacade가 단일 활성 배치의 claim·병렬 전송·결과 조정을 소유해야 합니다.");
+    String outboxStore =
+        Files.readString(MAIN_SOURCE.resolve("outbox/infrastructure/OutboxStore.java"));
+    assertTrue(
+        outboxStore.contains("FOR UPDATE SKIP LOCKED")
+            && outboxStore.contains("Propagation.REQUIRES_NEW")
+            && outboxStore.contains("Duration.ofSeconds(30)")
+            && outboxStore.contains("claim_token"),
+        "OutboxStore는 SKIP LOCKED·30초 lease·fencing·독립 상태 트랜잭션을 보존해야 합니다.");
   }
 
   @Test

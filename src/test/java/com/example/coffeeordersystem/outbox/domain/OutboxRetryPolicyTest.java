@@ -1,4 +1,4 @@
-package com.example.coffeeordersystem.outbox;
+package com.example.coffeeordersystem.outbox.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

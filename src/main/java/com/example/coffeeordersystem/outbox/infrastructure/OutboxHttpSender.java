@@ -1,5 +1,7 @@
-package com.example.coffeeordersystem.outbox;
+package com.example.coffeeordersystem.outbox.infrastructure;
 
+import com.example.coffeeordersystem.outbox.domain.OutboxDeliveryClassifier;
+import com.example.coffeeordersystem.outbox.domain.OutboxDeliveryResult;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -16,13 +18,13 @@ import org.springframework.stereotype.Component;
     name = "enabled",
     havingValue = "true",
     matchIfMissing = true)
-class OutboxHttpSender {
+public class OutboxHttpSender {
 
   private final HttpClient httpClient;
   private final URI endpoint;
   private final OutboxDeliveryClassifier classifier = new OutboxDeliveryClassifier();
 
-  OutboxHttpSender(
+  public OutboxHttpSender(
       @Qualifier("outboxHttpClient") HttpClient httpClient,
       @Qualifier("collectionApiBaseUri") URI baseUri) {
     this.httpClient = httpClient;
@@ -30,7 +32,7 @@ class OutboxHttpSender {
     this.endpoint = URI.create(baseUrl + (baseUrl.endsWith("/") ? "" : "/") + "events/orders");
   }
 
-  CompletableFuture<OutboxDeliveryResult> send(String payload) {
+  public CompletableFuture<OutboxDeliveryResult> send(String payload) {
     HttpRequest request =
         HttpRequest.newBuilder(endpoint)
             .timeout(Duration.ofSeconds(5))

@@ -1,5 +1,8 @@
-package com.example.coffeeordersystem.outbox;
+package com.example.coffeeordersystem.outbox.infrastructure;
 
+import com.example.coffeeordersystem.outbox.domain.OutboxClaim;
+import com.example.coffeeordersystem.outbox.domain.OutboxDeliveryResult;
+import com.example.coffeeordersystem.outbox.domain.OutboxRetryPolicy;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -17,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @RequiredArgsConstructor
 @Repository
-class OutboxStore {
+public class OutboxStore {
 
   private static final Duration LEASE = Duration.ofSeconds(30);
 

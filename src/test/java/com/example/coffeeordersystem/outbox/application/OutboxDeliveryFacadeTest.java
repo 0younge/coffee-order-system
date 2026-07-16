@@ -1,4 +1,4 @@
-package com.example.coffeeordersystem.outbox;
+package com.example.coffeeordersystem.outbox.application;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -8,6 +8,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.coffeeordersystem.outbox.domain.OutboxClaim;
+import com.example.coffeeordersystem.outbox.domain.OutboxDeliveryResult;
+import com.example.coffeeordersystem.outbox.infrastructure.OutboxHttpSender;
+import com.example.coffeeordersystem.outbox.infrastructure.OutboxMetrics;
+import com.example.coffeeordersystem.outbox.infrastructure.OutboxStore;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -20,7 +25,7 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 
 @ExtendWith(OutputCaptureExtension.class)
-class OutboxWorkerTest {
+class OutboxDeliveryFacadeTest {
 
   private static final Clock CLOCK =
       Clock.fixed(Instant.parse("2026-07-16T00:00:00Z"), ZoneOffset.UTC);
@@ -28,8 +33,8 @@ class OutboxWorkerTest {
   private final OutboxStore outboxStore = mock(OutboxStore.class);
   private final OutboxHttpSender httpSender = mock(OutboxHttpSender.class);
   private final OutboxMetrics metrics = mock(OutboxMetrics.class);
-  private final OutboxWorker worker =
-      new OutboxWorker(outboxStore, httpSender, CLOCK, metrics, new OutboxWorkerSettings(1, 1000));
+  private final OutboxDeliveryFacade facade =
+      new OutboxDeliveryFacade(outboxStore, httpSender, CLOCK, metrics);
 
   @Test
   @DisplayName("QT-OBS-001 Outbox 선점 예외의 메시지와 내부 정보를 로그에 노출하지 않는다")
@@ -37,7 +42,7 @@ class OutboxWorkerTest {
     when(outboxStore.claim(CLOCK.instant(), 1))
         .thenThrow(new IllegalStateException("SQL error DB_PASSWORD=top-secret"));
 
-    worker.poll();
+    facade.deliverDue(1);
 
     assertTrue(output.getAll().contains("errorType=\"IllegalStateException\""));
     assertFalse(output.getAll().contains("SQL error"));
@@ -54,7 +59,7 @@ class OutboxWorkerTest {
     when(outboxStore.publish("event-1", "claim-1", CLOCK.instant()))
         .thenThrow(new IllegalStateException("SQL error DB_PASSWORD=top-secret"));
 
-    worker.poll();
+    facade.deliverDue(1);
 
     String failureLog =
         output
@@ -86,8 +91,8 @@ class OutboxWorkerTest {
         .thenReturn(CompletableFuture.completedFuture(OutboxDeliveryResult.success()));
     when(outboxStore.publish("event-2", "claim-2", CLOCK.instant())).thenReturn(true);
 
-    assertDoesNotThrow(worker::poll);
-    assertDoesNotThrow(worker::poll);
+    assertDoesNotThrow(() -> facade.deliverDue(1));
+    assertDoesNotThrow(() -> facade.deliverDue(1));
 
     verify(outboxStore, times(2)).claim(CLOCK.instant(), 1);
     verify(outboxStore).publish("event-2", "claim-2", CLOCK.instant());

@@ -1,12 +1,12 @@
-package com.example.coffeeordersystem.outbox;
+package com.example.coffeeordersystem.outbox.domain;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
-class OutboxRetryPolicy {
+public class OutboxRetryPolicy {
 
-  Optional<Instant> nextRetryAt(int retryCount, Instant failedAt) {
+  public Optional<Instant> nextRetryAt(int retryCount, Instant failedAt) {
     Duration delay =
         switch (retryCount) {
           case 1 -> Duration.ofMinutes(1);

@@ -1,13 +1,13 @@
-package com.example.coffeeordersystem.outbox;
+package com.example.coffeeordersystem.outbox.domain;
 
-record OutboxDeliveryResult(
+public record OutboxDeliveryResult(
     boolean published, boolean retryable, OutboxErrorType errorType, Integer httpStatus) {
 
-  static OutboxDeliveryResult success() {
+  public static OutboxDeliveryResult success() {
     return new OutboxDeliveryResult(true, false, null, null);
   }
 
-  static OutboxDeliveryResult failed(
+  public static OutboxDeliveryResult failed(
       boolean retryable, OutboxErrorType errorType, Integer httpStatus) {
     return new OutboxDeliveryResult(false, retryable, errorType, httpStatus);
   }

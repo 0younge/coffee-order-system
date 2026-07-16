@@ -1,13 +1,13 @@
-package com.example.coffeeordersystem.outbox;
+package com.example.coffeeordersystem.outbox.domain;
 
 import java.io.IOException;
 import java.net.http.HttpTimeoutException;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 
-class OutboxDeliveryClassifier {
+public class OutboxDeliveryClassifier {
 
-  OutboxDeliveryResult classify(int statusCode) {
+  public OutboxDeliveryResult classify(int statusCode) {
     if (statusCode >= 200 && statusCode < 300) {
       return OutboxDeliveryResult.success();
     }
@@ -21,7 +21,7 @@ class OutboxDeliveryClassifier {
     return OutboxDeliveryResult.failed(true, OutboxErrorType.HTTP_5XX, statusCode);
   }
 
-  OutboxDeliveryResult classify(Throwable throwable) {
+  public OutboxDeliveryResult classify(Throwable throwable) {
     Throwable cause = unwrap(throwable);
     if (cause instanceof HttpTimeoutException) {
       return OutboxDeliveryResult.failed(true, OutboxErrorType.TIMEOUT, null);
