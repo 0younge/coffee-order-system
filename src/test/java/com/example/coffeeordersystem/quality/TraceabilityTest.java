@@ -22,18 +22,19 @@ class TraceabilityTest {
   private static final Pattern REQUIREMENT_ID = Pattern.compile("(?:FR|NFR)-[0-9]{2}");
   private static final Pattern TEST_ID = Pattern.compile("[A-Z]{2,4}-[A-Z]+-[0-9]{3}");
   private static final Pattern DISPLAY_NAME = Pattern.compile("@DisplayName\\(\"([^\"]+)\"\\)");
+  private static final Pattern TEST_METHOD =
+      Pattern.compile(
+          "(?m)((?:^[ \\t]*@[^\\r\\n]+\\R)+)^[ \\t]*(?:public |protected |private )?void \\w+\\s*\\(");
 
   @Test
   @DisplayName("QT-TRACE-001 README·요구사항·ADR·테스트 ID의 참조가 끊기지 않는다")
   void keepsDocumentationAndTestsTraceable() throws IOException {
-    String readme = Files.readString(Path.of("README.md"));
     String build = Files.readString(Path.of("build.gradle"));
     String prd = Files.readString(Path.of("docs/prd.md"));
     String testStrategy = Files.readString(Path.of("docs/test-strategy.md"));
     String traceability = Files.readString(Path.of("docs/requirements-traceability.md"));
 
-    verifyLocalLinks(Path.of("README.md"), readme);
-    verifyLocalLinks(Path.of("docs/requirements-traceability.md"), traceability);
+    verifyAllLocalLinks();
     assertEquals(requirementHeadings(prd), requirementRows(traceability));
     assertEquals(adrFiles(), adrLinks(traceability));
 
@@ -51,6 +52,15 @@ class TraceabilityTest {
         implementedTestIds.stream().allMatch(traceability::contains),
         "구현된 모든 테스트 ID가 요구사항 추적표에 연결되어야 합니다.");
     assertTrue(build.contains("inputs.files('README.md', fileTree('docs')"));
+  }
+
+  private void verifyAllLocalLinks() throws IOException {
+    verifyLocalLinks(Path.of("README.md"), Files.readString(Path.of("README.md")));
+    try (var paths = Files.walk(Path.of("docs"))) {
+      for (Path document : paths.filter(path -> path.toString().endsWith(".md")).toList()) {
+        verifyLocalLinks(document, Files.readString(document));
+      }
+    }
   }
 
   private void verifyLocalLinks(Path document, String contents) throws IOException {
@@ -88,9 +98,16 @@ class TraceabilityTest {
     try (var paths = Files.walk(Path.of("src/test/java"))) {
       Set<String> ids = new HashSet<>();
       for (Path path : paths.filter(file -> file.toString().endsWith(".java")).toList()) {
-        Matcher displayNames = DISPLAY_NAME.matcher(Files.readString(path));
-        while (displayNames.find()) {
-          ids.addAll(findIds(displayNames.group(1), TEST_ID));
+        Matcher testMethods = TEST_METHOD.matcher(Files.readString(path));
+        while (testMethods.find()) {
+          String annotations = testMethods.group(1);
+          if (!annotations.lines().anyMatch(line -> line.trim().equals("@Test"))) {
+            continue;
+          }
+          Matcher displayName = DISPLAY_NAME.matcher(annotations);
+          if (displayName.find()) {
+            ids.addAll(findIds(displayName.group(1), TEST_ID));
+          }
         }
       }
       return Set.copyOf(ids);
