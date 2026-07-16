@@ -1,8 +1,8 @@
-package com.example.coffeeordersystem.outbox;
+package com.example.coffeeordersystem.outbox.infrastructure;
 
 import java.time.Instant;
 
-public record OrderPaidEventPayload(
+record OrderPaidEventPayload(
     String eventId,
     String eventType,
     Instant occurredAt,

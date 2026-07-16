@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.coffeeordersystem.outbox.application.OutboxEventAppender;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -55,7 +56,7 @@ class OutboxWorkerIntegrationTest {
 
   @Autowired private MockMvc mockMvc;
 
-  @Autowired private OutboxEventWriter outboxEventWriter;
+  @Autowired private OutboxEventAppender outboxEventAppender;
 
   @Autowired private JdbcTemplate jdbcTemplate;
 
@@ -293,7 +294,7 @@ class OutboxWorkerIntegrationTest {
                 timestamp,
                 timestamp);
             eventIds.add(
-                outboxEventWriter.appendOrderPaid(orderId, userId, menuId, 4_000L, occurredAt));
+                outboxEventAppender.appendOrderPaid(orderId, userId, menuId, 4_000L, occurredAt));
           }
         });
     return List.copyOf(eventIds);

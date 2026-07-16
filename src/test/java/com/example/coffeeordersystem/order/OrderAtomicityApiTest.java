@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.example.coffeeordersystem.outbox.OutboxEventWriter;
+import com.example.coffeeordersystem.outbox.application.OutboxEventAppender;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
@@ -25,6 +25,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.util.AopTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
@@ -38,7 +39,7 @@ class OrderAtomicityApiTest {
 
   @Autowired private JdbcTemplate jdbcTemplate;
 
-  @MockitoSpyBean private OutboxEventWriter outboxEventWriter;
+  @MockitoSpyBean private OutboxEventAppender outboxEventAppender;
 
   private long userId;
   private long menuId;
@@ -73,12 +74,13 @@ class OrderAtomicityApiTest {
   @Test
   @DisplayName("IT-ORDER-003 Outbox 저장 뒤 장애가 나면 주문의 모든 상태를 롤백한다")
   void rollsBackAllOrderStateWhenOutboxStepFails() throws Exception {
+    OutboxEventAppender targetAppender = AopTestUtils.getUltimateTargetObject(outboxEventAppender);
     doAnswer(
             invocation -> {
               invocation.callRealMethod();
               throw new DataAccessResourceFailureException("테스트용 Outbox 저장 후 장애");
             })
-        .when(outboxEventWriter)
+        .when(targetAppender)
         .appendOrderPaid(anyLong(), anyLong(), anyLong(), anyLong(), any(Instant.class));
 
     mockMvc

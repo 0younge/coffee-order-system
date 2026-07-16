@@ -10,7 +10,7 @@ import com.example.coffeeordersystem.idempotency.application.IdempotencyOperatio
 import com.example.coffeeordersystem.idempotency.application.RequestHasher;
 import com.example.coffeeordersystem.menu.application.MenuQueryFacade;
 import com.example.coffeeordersystem.menu.application.MenuSnapshot;
-import com.example.coffeeordersystem.outbox.OutboxEventWriter;
+import com.example.coffeeordersystem.outbox.application.OutboxEventAppender;
 import com.example.coffeeordersystem.point.application.LockedPointBalance;
 import com.example.coffeeordersystem.point.application.PointPaymentFacade;
 import java.time.Clock;
@@ -30,7 +30,7 @@ class OrderService {
   private final RequestHasher requestHasher;
   private final MenuQueryFacade menuQueryFacade;
   private final OrderRepository orderRepository;
-  private final OutboxEventWriter outboxEventWriter;
+  private final OutboxEventAppender outboxEventAppender;
   private final ApiResponseJsonCodec responseJsonCodec;
   private final Clock clock;
   private final BusinessEventLogger businessEventLogger;
@@ -68,7 +68,7 @@ class OrderService {
         orderRepository.save(
             Order.paid(command.userId(), menu.menuId(), menu.name(), menu.price(), now));
     String eventId =
-        outboxEventWriter.appendOrderPaid(
+        outboxEventAppender.appendOrderPaid(
             order.id(), command.userId(), menu.menuId(), menu.price(), now);
     OrderResult result =
         success(

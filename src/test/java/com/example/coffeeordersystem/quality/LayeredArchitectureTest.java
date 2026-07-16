@@ -130,6 +130,30 @@ class LayeredArchitectureTest {
             || orderService.contains("point.domain.")
             || orderService.contains("point.infrastructure."),
         "Order는 Point API, Domain, Infrastructure를 직접 참조할 수 없습니다.");
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("outbox/application/OutboxEventAppender.java")),
+        "Outbox는 주문 이벤트 기록용 공개 Application 계약을 제공해야 합니다.");
+    assertTrue(
+        Files.exists(MAIN_SOURCE.resolve("outbox/infrastructure/JdbcOutboxEventAppender.java")),
+        "Outbox 이벤트 JSON/JDBC 저장은 Infrastructure에 있어야 합니다.");
+    String outboxEventAppender =
+        Files.readString(MAIN_SOURCE.resolve("outbox/infrastructure/JdbcOutboxEventAppender.java"));
+    assertTrue(
+        outboxEventAppender.contains("Propagation.MANDATORY"),
+        "Outbox 이벤트 기록은 기존 주문 트랜잭션에 반드시 참여해야 합니다.");
+    assertFalse(
+        sources.stream()
+            .map(source -> source.path().getFileName().toString())
+            .anyMatch(name -> name.equals("OutboxEventWriter.java")),
+        "기존 OutboxEventWriter를 공개 구현으로 남길 수 없습니다.");
+    assertTrue(
+        orderService.contains("outbox.application.OutboxEventAppender"),
+        "Order는 Outbox Application 기록 계약만 사용해야 합니다.");
+    assertFalse(
+        orderService.contains("outbox.api.")
+            || orderService.contains("outbox.domain.")
+            || orderService.contains("outbox.infrastructure."),
+        "Order는 Outbox API, Domain, Infrastructure를 직접 참조할 수 없습니다.");
   }
 
   @Test

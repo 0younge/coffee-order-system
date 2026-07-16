@@ -1,21 +1,25 @@
-package com.example.coffeeordersystem.outbox;
+package com.example.coffeeordersystem.outbox.infrastructure;
 
+import com.example.coffeeordersystem.outbox.application.OutboxEventAppender;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
-import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
-@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
+@RequiredArgsConstructor
 @Component
-public class OutboxEventWriter {
+class JdbcOutboxEventAppender implements OutboxEventAppender {
 
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
 
+  @Override
+  @Transactional(propagation = Propagation.MANDATORY)
   public String appendOrderPaid(
       long orderId, long userId, long menuId, long paymentAmount, Instant occurredAt) {
     String eventId = UUID.randomUUID().toString();

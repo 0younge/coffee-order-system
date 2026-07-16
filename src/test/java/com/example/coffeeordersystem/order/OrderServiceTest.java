@@ -16,7 +16,7 @@ import com.example.coffeeordersystem.idempotency.application.IdempotencyOperatio
 import com.example.coffeeordersystem.idempotency.application.RequestHasher;
 import com.example.coffeeordersystem.menu.application.MenuQueryFacade;
 import com.example.coffeeordersystem.menu.application.MenuSnapshot;
-import com.example.coffeeordersystem.outbox.OutboxEventWriter;
+import com.example.coffeeordersystem.outbox.application.OutboxEventAppender;
 import com.example.coffeeordersystem.point.application.LockedPointBalance;
 import com.example.coffeeordersystem.point.application.PointPaymentFacade;
 import java.time.Clock;
@@ -41,7 +41,7 @@ class OrderServiceTest {
     RequestHasher requestHasher = mock(RequestHasher.class);
     MenuQueryFacade menuQueryFacade = mock(MenuQueryFacade.class);
     OrderRepository orderRepository = mock(OrderRepository.class);
-    OutboxEventWriter outboxEventWriter = mock(OutboxEventWriter.class);
+    OutboxEventAppender outboxEventAppender = mock(OutboxEventAppender.class);
     ApiResponseJsonCodec responseJsonCodec = mock(ApiResponseJsonCodec.class);
     Clock clock = mock(Clock.class);
     BusinessEventLogger businessEventLogger = mock(BusinessEventLogger.class);
@@ -69,7 +69,7 @@ class OrderServiceTest {
     Order savedOrder = mock(Order.class);
     when(savedOrder.id()).thenReturn(4L);
     when(orderRepository.save(any(Order.class))).thenReturn(savedOrder);
-    when(outboxEventWriter.appendOrderPaid(4L, 1L, 2L, 4_000L, paidAt)).thenReturn("event-id");
+    when(outboxEventAppender.appendOrderPaid(4L, 1L, 2L, 4_000L, paidAt)).thenReturn("event-id");
     when(responseJsonCodec.write(any())).thenReturn("response-body");
     doReturn(mock(JsonNode.class)).when(responseJsonCodec).read("response-body");
 
@@ -80,7 +80,7 @@ class OrderServiceTest {
             requestHasher,
             menuQueryFacade,
             orderRepository,
-            outboxEventWriter,
+            outboxEventAppender,
             responseJsonCodec,
             clock,
             businessEventLogger);
@@ -96,7 +96,7 @@ class OrderServiceTest {
 
       verify(clock).instant();
       verify(pointBalance).pay(4_000L, paidAt);
-      verify(outboxEventWriter).appendOrderPaid(4L, 1L, 2L, 4_000L, paidAt);
+      verify(outboxEventAppender).appendOrderPaid(4L, 1L, 2L, 4_000L, paidAt);
     } finally {
       releaseLock.countDown();
       executor.shutdownNow();
