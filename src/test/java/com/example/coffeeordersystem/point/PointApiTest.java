@@ -105,6 +105,9 @@ class PointApiTest {
     expectError("not-a-uuid", validBody, 400, "INVALID_REQUEST");
     expectError(UUID.randomUUID().toString(), body("0"), 400, "INVALID_CHARGE_AMOUNT");
     expectError(UUID.randomUUID().toString(), body("-1"), 400, "INVALID_CHARGE_AMOUNT");
+    expectError(UUID.randomUUID().toString(), body("1.0"), 400, "INVALID_REQUEST");
+    expectError(UUID.randomUUID().toString(), body("1.5"), 400, "INVALID_REQUEST");
+    expectError(UUID.randomUUID().toString(), body("1e2"), 400, "INVALID_REQUEST");
     expectError(
         UUID.randomUUID().toString(), body("9223372036854775808"), 400, "INVALID_CHARGE_AMOUNT");
     expectError(UUID.randomUUID().toString(), body("\"100\""), 400, "INVALID_REQUEST");
@@ -120,6 +123,21 @@ class PointApiTest {
         "INVALID_REQUEST");
     expectError(
         UUID.randomUUID().toString(), "{\"userId\":0,\"amount\":100}", 400, "INVALID_REQUEST");
+    expectError(
+        UUID.randomUUID().toString(),
+        "{\"userId\":" + userId + ".0,\"amount\":100}",
+        400,
+        "INVALID_REQUEST");
+    expectError(
+        UUID.randomUUID().toString(),
+        "{\"userId\":" + userId + ".5,\"amount\":100}",
+        400,
+        "INVALID_REQUEST");
+    expectError(
+        UUID.randomUUID().toString(),
+        "{\"userId\":" + userId + "e0,\"amount\":100}",
+        400,
+        "INVALID_REQUEST");
     mockMvc
         .perform(
             post("/api/v1/points/charge")
@@ -158,7 +176,7 @@ class PointApiTest {
   }
 
   @Test
-  @DisplayName("AT-POINT-003 같은 키·같은 요청은 최초 응답을 재사용하고 한 번만 충전한다")
+  @DisplayName("IT-IDEM-001 AT-POINT-003 같은 키·같은 요청은 최초 응답을 재사용하고 한 번만 충전한다")
   void reusesSameIdempotentRequest() throws Exception {
     String key = UUID.randomUUID().toString();
     String request = body("250");
@@ -176,7 +194,7 @@ class PointApiTest {
   }
 
   @Test
-  @DisplayName("AT-POINT-004 같은 키의 다른 금액은 추가 충전 없이 거절한다")
+  @DisplayName("IT-IDEM-002 AT-POINT-004 같은 키의 다른 금액은 추가 충전 없이 거절한다")
   void rejectsDifferentRequestWithSameKey() throws Exception {
     String key = UUID.randomUUID().toString();
 

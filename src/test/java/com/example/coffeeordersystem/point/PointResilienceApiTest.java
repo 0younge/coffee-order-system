@@ -62,8 +62,8 @@ class PointResilienceApiTest {
   }
 
   @Test
-  @DisplayName("IT-RESILIENCE-001 사용자 행 락 타임아웃은 503이며 멱등 선점도 롤백한다")
-  void rollsBackIdempotencyClaimOnLockTimeout() throws Exception {
+  @DisplayName("IT-RESILIENCE-001 사용자 행 락 타임아웃은 503이며 상태를 변경하지 않는다")
+  void doesNotChangeStateOnLockTimeout() throws Exception {
     CountDownLatch locked = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
     TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);

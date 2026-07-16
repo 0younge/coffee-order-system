@@ -39,7 +39,7 @@ class IdempotencyRepository {
       long userId, IdempotencyOperation operation, String idempotencyKey) {
     return jdbcTemplate
         .query(
-            "SELECT id, request_hash, status, http_status, result_code, response_body "
+            "SELECT id, request_hash, status, http_status, response_body "
                 + "FROM idempotency_records "
                 + "WHERE user_id = ? AND operation_type = ? AND idempotency_key = ? "
                 + "FOR UPDATE",
@@ -49,7 +49,6 @@ class IdempotencyRepository {
                     resultSet.getString("request_hash"),
                     resultSet.getString("status"),
                     (Integer) resultSet.getObject("http_status"),
-                    resultSet.getString("result_code"),
                     resultSet.getString("response_body")),
             userId,
             operation.name(),
@@ -78,10 +77,5 @@ class IdempotencyRepository {
   }
 
   record IdempotencyRecord(
-      long id,
-      String requestHash,
-      String status,
-      Integer httpStatus,
-      String resultCode,
-      String responseBody) {}
+      long id, String requestHash, String status, Integer httpStatus, String responseBody) {}
 }

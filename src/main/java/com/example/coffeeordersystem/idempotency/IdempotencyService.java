@@ -30,12 +30,7 @@ public class IdempotencyService {
     JsonNode responseBody =
         record.responseBody() == null ? null : objectMapper.readTree(record.responseBody());
     return new IdempotencyClaim(
-        record.id(),
-        record.requestHash(),
-        record.status(),
-        record.httpStatus(),
-        record.resultCode(),
-        responseBody);
+        record.id(), record.requestHash(), record.status(), record.httpStatus(), responseBody);
   }
 
   public void complete(
