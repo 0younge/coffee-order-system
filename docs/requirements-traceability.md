@@ -38,7 +38,7 @@
 | Spring context·설정 테스트 | 검증됨 | [CoffeeOrderSystemApplicationTests.java](../src/test/java/com/example/coffeeordersystem/CoffeeOrderSystemApplicationTests.java), [TimeConfigurationTest.java](../src/test/java/com/example/coffeeordersystem/config/TimeConfigurationTest.java), [BuildConfigurationTest.java](../src/test/java/com/example/coffeeordersystem/quality/BuildConfigurationTest.java); [#1 증거](#기반선-검증-증거-github-1) | 업무 기능별 테스트 |
 | 기능 구현 | 구현 중 | 스키마와 기준 데이터 구현 완료 | Menu, Point, Order, Idempotency, Outbox 업무 코드 |
 | 데이터베이스 | 검증됨 | [V1 migration](../src/main/resources/db/migration/V1__create_schema_and_seed_reference_data.sql), [V2 migration](../src/main/resources/db/migration/V2__make_lifecycle_codes_case_sensitive.sql), [DatabaseMigrationTest.java](../src/test/java/com/example/coffeeordersystem/database/DatabaseMigrationTest.java); [#1 증거](#기반선-검증-증거-github-1) | 업무 트랜잭션·락·쿼리 |
-| 검증 자동화 | 검증됨 | 테스트 DB·워커 격리, Spotless `check` 연결, MySQL 기반 전체 15개 테스트; [#1 증거](#기반선-검증-증거-github-1) | 후속 이슈의 계층별 업무·동시성·외부 연동 테스트와 CI 증거 |
+| 검증 자동화 | 검증됨 | 테스트 DB·워커 격리, Spotless `check` 연결, MySQL 기반 전체 18개 테스트; [#1 증거](#기반선-검증-증거-github-1) | 후속 이슈의 계층별 업무·동시성·외부 연동 테스트와 CI 증거 |
 
 이 기준선은 문서상의 목표와 실제 저장소 상태를 분리하기 위한 것이다. 구현이 추가되면 아래 표의 상태와 증거를 같은 변경에서 갱신한다.
 
@@ -46,8 +46,8 @@
 
 1. 구현: [build.gradle](../build.gradle), [compose.yaml](../compose.yaml), [application.yaml](../src/main/resources/application.yaml), [TimeConfiguration.java](../src/main/java/com/example/coffeeordersystem/config/TimeConfiguration.java), [Flyway V1](../src/main/resources/db/migration/V1__create_schema_and_seed_reference_data.sql), [Flyway V2](../src/main/resources/db/migration/V2__make_lifecycle_codes_case_sensitive.sql)
 2. 테스트: `IT-DB-001`~`004`, `IT-TIME-001`, `QT-CONFIG-002`~`003`, `QT-DEPS-001`, `QT-FORMAT-001`, `QT-SCHEMA-001` — [DatabaseMigrationTest.java](../src/test/java/com/example/coffeeordersystem/database/DatabaseMigrationTest.java), [TimeConfigurationTest.java](../src/test/java/com/example/coffeeordersystem/config/TimeConfigurationTest.java), [BuildConfigurationTest.java](../src/test/java/com/example/coffeeordersystem/quality/BuildConfigurationTest.java)
-3. 실행: 2026-07-16 MySQL 8.4 healthy에서 `docker compose config -q`, `./gradlew clean check build` 성공; 전체 15개, 성공 15개, 실패 0개, 제외 0개. `./gradlew bootRun` 시작 성공, `GET /actuator/health` 응답 `UP`
-4. 재현 커밋: `8b2c204`(기반선), `058a441`(스키마·UTC 보완), `6a7049b`(로컬 UTC 회귀 방지); GitHub 작업 이슈 `#1`
+3. 실행: 2026-07-16 MySQL 8.4 healthy에서 `docker compose config -q`, `./gradlew clean check build` 성공; 전체 18개, 성공 18개, 실패 0개, 제외 0개. `./gradlew bootRun` 시작 성공, `GET /actuator/health` 응답 `UP`
+4. 재현 커밋: `8b2c204`(기반선), `058a441`(스키마·UTC 보완), `6a7049b`(로컬 UTC 회귀 방지), `319c2f7`(의존성·DB 행렬 검증); GitHub 작업 이슈 `#1`
 
 ## 3. 기능 요구사항 추적
 
