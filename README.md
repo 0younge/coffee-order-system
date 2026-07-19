@@ -76,6 +76,7 @@ erDiagram
 
 | 문제 | 분석한 대안 | 선택 | 선택 이유와 감수한 점 |
 |---|---|---|---|
+| 기능과 계층의 경계가 코드 경로에서 드러나지 않음 | 전역 3계층, 멀티모듈·마이크로서비스, 모든 클래스의 Interface·Impl 분리, 기능 우선 계층화 | 기능별 `api`·`application`·`domain`·`infrastructure`와 공개 Application Facade | 기능 응집도와 단일 DB 트랜잭션을 함께 유지하고 다른 기능은 Application 계약으로만 협력함. 경계를 구조 테스트로 계속 관리해야 함 |
 | 동시 충전·결제의 갱신 유실 | 애플리케이션 로컬 락, 낙관적 락, DB 비관적 락 | 사용자 행 `FOR UPDATE` | 공용 MySQL이 인스턴스 수와 무관한 사용자 단위 직렬화 경계가 됨. 같은 사용자 경합은 대기함 |
 | 네트워크 재시도의 중복 변경 | 재시도 금지, 본문 추정, DB 유일 키, 멱등 결과 저장 | UUID 멱등키와 최초 결과 저장 | 충전·주문을 한 번만 반영하고 응답 유실 뒤에도 최초 결과를 재사용함. 멱등 레코드가 추가됨 |
 | 주문과 외부 이벤트의 이중 쓰기 | 트랜잭션 안 동기 HTTP, 메모리 큐, Kafka, Transactional Outbox | MySQL Transactional Outbox | 주문과 이벤트를 원자적으로 보존하고 외부 장애를 고객 요청에서 분리함. 폴링·재시도 워커가 필요함 |
@@ -83,6 +84,7 @@ erDiagram
 | 인기 메뉴 주문 수의 정확성 | 캐시·사전 집계, 이벤트 조회 모델, 주문 직접 집계 | 최근 `PAID` 주문 직접 집계 | 별도 집계 정합성 문제 없이 커밋된 주문과 즉시 일치함. 데이터 증가 시 쿼리 비용을 측정해야 함 |
 | 사용자 식별 | 요청 본문 사용자 ID, 별도 인증 API, JWT | 요청 본문 `userId` | 과제 원문의 입력 계약에 직접 대응하고 인증 범위를 추가하지 않음. 사용자 ID 소유권은 검증하지 않음 |
 | MySQL 고유 동작 검증 | H2, 저장소 mock, 실제 MySQL | 단일 Compose MySQL의 별도 테스트 DB | 실제 제품 동작을 검증하면서 개발 데이터와 전역 Outbox 워커의 간섭을 차단함. 테스트 DB 초기화가 추가됨 |
+| 계층 분리로 늘어난 생성자·로거 보일러플레이트 | 명시 코드 유지, Lombok 전면 사용, 제한적 Lombok | 생성자·로거·JPA 기본 생성자에만 제한적 Lombok | 반복을 줄이되 Entity의 상태 변경 경로와 불변식을 유지함. annotation processing과 IDE 지원이 필요함 |
 
 ### 기술적 선택 이유
 
@@ -93,6 +95,7 @@ erDiagram
 | Flyway | 스키마·초기 메뉴·과제용 기준 사용자를 코드와 함께 버전 관리하고 빈 DB 재현성을 확보 |
 | JDK `HttpClient`·Mock HTTP | 외부 전달과 테스트에 별도 HTTP 라이브러리를 추가하지 않고 표준 기능 사용 |
 | Actuator·Micrometer | 기본 HTTP·HikariCP 지표와 최소한의 DB 경합·Outbox 사용자 정의 지표를 같은 방식으로 관찰 |
+| Lombok | Spring Bean의 생성자 주입과 로거, JPA의 보호된 기본 생성자만 생성하고 `@Data`·전체 `@Setter`처럼 불변식을 흐리는 annotation은 사용하지 않음 |
 | Spotless | Java 포맷을 `check` 완료 게이트에서 결정적으로 검사하고 필요할 때만 명시적으로 자동 수정 |
 
 ## 제품 범위
@@ -140,12 +143,13 @@ erDiagram
 | 스키마 변경 | Flyway (`spring-boot-flyway`, `flyway-core`, `flyway-mysql`) |
 | 테스트 | JUnit 5, 실제 MySQL 기반 통합 테스트, 외부 API Mock 서버 |
 | 관측성 | Spring Boot Actuator, Micrometer |
+| 보일러플레이트 | Lombok (`compileOnly`, `annotationProcessor`)으로 생성자 주입·로거·보호된 JPA 기본 생성자만 제한적으로 생성 |
 | 코드 포맷 검사 | Gradle Spotless와 Java 포매터, `spotlessCheck`를 `check`에 포함 |
 | 로컬 인프라 | Docker Compose로 MySQL만 실행; 애플리케이션은 호스트에서 Gradle로 실행 |
 
-버전 선택의 근거는 [ADR-0005](./docs/adr/0005-establish-java-spring-mysql-platform-baseline.md), 애플리케이션 구성 방식은 [ADR-0006](./docs/adr/0006-use-feature-oriented-modular-monolith.md)를 참고합니다.
+버전 선택의 근거는 [ADR-0005](./docs/adr/0005-establish-java-spring-mysql-platform-baseline.md), 기능 중심 모듈러 모놀리스는 [ADR-0006](./docs/adr/0006-use-feature-oriented-modular-monolith.md), 기능 내부 계층과 공개 Facade 경계는 [ADR-0026](./docs/adr/0026-refine-feature-first-layered-architecture.md), 제한된 Lombok 정책은 [ADR-0027](./docs/adr/0027-use-lombok-with-restrictions.md)을 참고합니다.
 
-자동 구현 단계에서 추가가 승인된 애플리케이션 의존성은 `spring-boot-starter-validation`, `spring-boot-starter-actuator`, Spring Boot 4의 Flyway 자동 구성 모듈인 `org.springframework.boot:spring-boot-flyway`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`뿐입니다. 빌드 도구로는 Spotless 플러그인과 Java 포매터가 추가 승인됐습니다. Mock HTTP, 비동기 HTTP와 bounded polling은 JDK 표준 기능을 사용하고 다른 라이브러리는 추가 전에 다시 확인합니다.
+현재 구현 단계에서 추가가 승인된 애플리케이션 의존성은 `spring-boot-starter-validation`, `spring-boot-starter-actuator`, Spring Boot 4의 Flyway 자동 구성 모듈인 `org.springframework.boot:spring-boot-flyway`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-mysql`과 제한적으로 사용하는 Lombok입니다. Lombok은 `compileOnly`와 `annotationProcessor`로만 선언하며 런타임 의존성으로 두지 않습니다. 빌드 도구로는 Spotless 플러그인과 Java 포매터가 추가 승인됐습니다. Mock HTTP, 비동기 HTTP와 bounded polling은 JDK 표준 기능을 사용하고 다른 라이브러리는 추가 전에 다시 확인합니다.
 
 첫 구현의 관측성은 Spring MVC의 `http.server.requests`, HikariCP 기본 지표, DB lock timeout·deadlock 카운터, Outbox 전송 결과·재시도·최종 실패·fencing 거절 카운터, `PENDING`·`FAILED` 건수와 가장 오래된 대기 이벤트 시간 gauge로 제한합니다. 요청·사용자·주문·이벤트 ID는 key-value 로그로 연결합니다. HTTP에는 상세 정보를 숨긴 `/actuator/health`만 노출하고 외부 exporter, JSON 로그 라이브러리와 알림 규칙은 추가하지 않습니다.
 
